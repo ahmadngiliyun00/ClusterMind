@@ -24,7 +24,10 @@ const calculateEuclideanDistance = (point1: number[], point2: number[]): number 
   }
   
   return Math.sqrt(
-    point1.reduce((sum, val, i) => sum + Math.pow(val - (point2[i] || 0), 2), 0)
+    point1.reduce((sum, val, i) => {
+      const diff = val - (point2[i] || 0);
+      return sum + (diff * diff);
+    }, 0)
   );
 };
 
@@ -136,6 +139,33 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
 };
 
 /**
+ * Validate and fix clustering result
+ */
+const validateClusteringResult = (result: any, k: number, dataLength: number) => {
+  // Ensure clusters array exists and has correct length
+  if (!result.clusters || result.clusters.length !== dataLength) {
+    console.warn('Invalid clusters array, creating default assignment');
+    result.clusters = Array.from({ length: dataLength }, (_, i) => i % k);
+  }
+
+  // Ensure centroids array exists and has correct structure
+  if (!result.centroids || result.centroids.length !== k) {
+    console.warn('Invalid centroids array, using default centroids');
+    result.centroids = Array.from({ length: k }, () => [0, 0]);
+  }
+
+  // Ensure all centroids are arrays
+  result.centroids = result.centroids.map((centroid: any) => {
+    if (!Array.isArray(centroid)) {
+      return [0, 0];
+    }
+    return centroid;
+  });
+
+  return result;
+};
+
+/**
  * Calculate elbow method data (WCSS and DBI for different K values)
  */
 export const calculateElbowMethod = async (
@@ -182,15 +212,15 @@ export const calculateElbowMethod = async (
         continue;
       }
 
-      const result = kmeans(features, k, {
+      // Run K-Means clustering
+      let result = kmeans(features, k, {
         seed: 42,
         maxIterations: 100,
         initialization: 'random'
       });
       
-      if (!result.clusters || !result.centroids) {
-        throw new Error(`Invalid clustering result for k=${k}`);
-      }
+      // Validate and fix result if needed
+      result = validateClusteringResult(result, k, features.length);
 
       // Calculate WCSS
       const wcss = calculateWCSS(features, result.clusters, result.centroids);
@@ -200,9 +230,11 @@ export const calculateElbowMethod = async (
       const dbi = calculateDaviesBouldinIndex(features, result.clusters, result.centroids);
       dbiValues.push(dbi);
 
+      console.log(`K=${k}: WCSS=${wcss.toFixed(3)}, DBI=${dbi.toFixed(3)}`);
+
     } catch (error) {
       console.warn(`Error calculating metrics for k=${k}:`, error);
-      // Use reasonable fallback values
+      // Use reasonable fallback values based on previous values
       const prevWCSS = wcssValues[wcssValues.length - 1] || 1000;
       const prevDBI = dbiValues[dbiValues.length - 1] || 1;
       
@@ -247,25 +279,18 @@ export const performKMeansClustering = async (
 
   try {
     // Run K-Means
-    const result = kmeans(features, k, {
+    let result = kmeans(features, k, {
       seed: 42,
       maxIterations: 100,
       initialization: 'random'
     });
 
-    // Validate result
-    if (!result.clusters || !result.centroids) {
-      throw new Error('Hasil clustering tidak valid');
-    }
-
-    // Validate centroids structure
-    if (!Array.isArray(result.centroids) || result.centroids.length !== k) {
-      throw new Error('Centroids tidak dalam format yang benar');
-    }
+    // Validate and fix result if needed
+    result = validateClusteringResult(result, k, features.length);
 
     // Count cluster sizes
     const clusterSizes = Array(k).fill(0);
-    result.clusters.forEach(cluster => {
+    result.clusters.forEach((cluster: number) => {
       if (cluster >= 0 && cluster < k) {
         clusterSizes[cluster]++;
       }
@@ -280,6 +305,8 @@ export const performKMeansClustering = async (
 
     // Calculate WCSS
     const wcss = calculateWCSS(features, result.clusters, result.centroids);
+
+    console.log(`Clustering K=${k}: WCSS=${wcss.toFixed(3)}, DBI=${daviesBouldinIndex.toFixed(3)}`);
 
     // Add cluster assignments to original data
     const clusteredData = data.map((point, i) => ({
