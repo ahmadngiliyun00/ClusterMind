@@ -63,7 +63,7 @@ function App() {
       setIsLoading(true);
       const processedData = await performNominalToNumerical(rawData);
       setNumericalData(processedData);
-      setActiveStep(4); // Skip to normalization step
+      setActiveStep(3);
     } catch (error) {
       console.error('Error converting nominal to numerical:', error);
       alert('Terjadi kesalahan saat mengkonversi data nominal ke numerik.');
@@ -81,7 +81,7 @@ function App() {
       setIsLoading(true);
       const normalizedResult = await performNormalization(dataToNormalize);
       setNormalizedData(normalizedResult);
-      setActiveStep(5);
+      setActiveStep(4);
     } catch (error) {
       console.error('Error normalizing data:', error);
       alert('Terjadi kesalahan saat melakukan normalisasi data.');
@@ -113,6 +113,7 @@ function App() {
       }
       
       setExperimentResults(results);
+      setActiveStep(5);
     } catch (error) {
       console.error('Error performing clustering experiments:', error);
       alert('Terjadi kesalahan saat melakukan eksperimen clustering.');
@@ -149,6 +150,21 @@ function App() {
     setInertiaValues(null);
     setActiveStep(1);
     setShowAbout(true);
+  };
+
+  // Navigation functions
+  const goToPreviousStep = () => {
+    if (activeStep > 1) {
+      setActiveStep(activeStep - 1);
+    }
+  };
+
+  const goToNextStep = () => {
+    if (activeStep === 3 && numericalData) {
+      handleNormalization();
+    } else if (activeStep === 4 && normalizedData) {
+      setActiveStep(5);
+    }
   };
 
   // Determine next step logic
@@ -429,6 +445,7 @@ function App() {
                     onNext={getNextStepInfo()?.action}
                     nextButtonText={getNextStepInfo()?.buttonText || "Lanjutkan"}
                     showNextButton={activeStep === 2}
+                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
                 </section>
               )}
@@ -443,9 +460,10 @@ function App() {
                     description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi."
                     numericalColumns={numericalData.numericalColumns}
                     categoricalColumns={numericalData.categoricalColumns}
-                    onNext={handleNormalization}
+                    onNext={activeStep === 3 ? goToNextStep : undefined}
                     nextButtonText="Lakukan Normalisasi"
                     showNextButton={activeStep === 3}
+                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
                 </section>
               )}
@@ -460,9 +478,10 @@ function App() {
                     description="Data telah dinormalisasi menggunakan min-max scaling. Semua nilai berada dalam rentang 0-1. Data siap untuk clustering."
                     numericalColumns={normalizedData.numericalColumns}
                     categoricalColumns={normalizedData.categoricalColumns}
-                    onNext={() => setActiveStep(5)}
+                    onNext={activeStep === 4 ? goToNextStep : undefined}
                     nextButtonText="Lanjut ke Clustering"
                     showNextButton={activeStep === 4}
+                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
                 </section>
               )}

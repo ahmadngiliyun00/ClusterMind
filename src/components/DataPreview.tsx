@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Database, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Database, ArrowRight, ArrowLeft } from 'lucide-react';
 import { DataPoint } from '../utils/csv';
 
 interface DataPreviewProps {
@@ -10,6 +10,7 @@ interface DataPreviewProps {
   numericalColumns: string[];
   categoricalColumns: string[];
   onNext?: () => void;
+  onPrevious?: () => void;
   nextButtonText?: string;
   showNextButton?: boolean;
 }
@@ -22,6 +23,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({
   numericalColumns,
   categoricalColumns,
   onNext,
+  onPrevious,
   nextButtonText = "Lanjutkan",
   showNextButton = true
 }) => {
@@ -185,8 +187,24 @@ const DataPreview: React.FC<DataPreviewProps> = ({
         </div>
       )}
 
-      {showNextButton && onNext && (
-        <div className="mt-6 flex justify-end">
+      {/* Navigation Buttons */}
+      <div className="mt-6 flex justify-between">
+        {/* Previous Button */}
+        {onPrevious && (
+          <button
+            onClick={onPrevious}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+          >
+            <ArrowLeft size={16} />
+            Sebelumnya
+          </button>
+        )}
+        
+        {/* Spacer if no previous button */}
+        {!onPrevious && <div></div>}
+
+        {/* Next Button */}
+        {showNextButton && onNext && (
           <button
             onClick={onNext}
             className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
@@ -194,8 +212,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({
             {nextButtonText}
             <ArrowRight size={16} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
