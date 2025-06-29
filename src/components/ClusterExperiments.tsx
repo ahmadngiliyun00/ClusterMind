@@ -20,10 +20,13 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   isLoading,
   maxK = 10
 }) => {
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState('k-means');
   const [experiments, setExperiments] = useState<ClusterExperiment[]>([
     { id: '1', k: 2, name: 'Eksperimen 1' },
     { id: '2', k: 3, name: 'Eksperimen 2' },
-    { id: '3', k: 4, name: 'Eksperimen 3' }
+    { id: '3', k: 4, name: 'Eksperimen 3' },
+    { id: '4', k: 5, name: 'Eksperimen 4' },
+    { id: '5', k: 6, name: 'Eksperimen 5' }
   ]);
 
   const addExperiment = () => {
@@ -67,9 +70,10 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
           </label>
           <select
             id="algorithm"
+            value={selectedAlgorithm}
+            onChange={(e) => setSelectedAlgorithm(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            defaultValue="k-means"
-            disabled
+            disabled={isLoading}
           >
             <option value="k-means">K-Means</option>
             <option value="k-medoids" disabled>K-Medoids (Segera Hadir)</option>
@@ -81,7 +85,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
         <div>
           <div className="flex items-center justify-between mb-4">
             <label className="block text-sm font-medium text-gray-700">
-              Eksperimen Jumlah Cluster
+              Eksperimen Jumlah Cluster (Minimal 5)
             </label>
             <button
               onClick={addExperiment}
@@ -117,7 +121,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
                     disabled={isLoading}
                   />
                 </div>
-                {experiments.length > 1 && (
+                {experiments.length > 5 && (
                   <button
                     onClick={() => removeExperiment(experiment.id)}
                     disabled={isLoading}
@@ -129,6 +133,12 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
               </div>
             ))}
           </div>
+          
+          {experiments.length < 5 && (
+            <p className="text-sm text-amber-600 mt-2">
+              ⚠️ Minimal 5 eksperimen diperlukan untuk analisis yang optimal
+            </p>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -136,7 +146,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
           <button
             className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             onClick={handleRunExperiments}
-            disabled={isLoading}
+            disabled={isLoading || experiments.length < 5}
           >
             <Play size={20} />
             <span>Jalankan Eksperimen</span>

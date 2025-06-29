@@ -1,6 +1,5 @@
-import KMeans from 'ml-kmeans';
+import { kmeans } from 'ml-kmeans';
 import { DataPoint } from './csv';
-import { preprocessData } from './preprocessing';
 
 export interface ClusteringResult {
   clusters: number[];
@@ -25,28 +24,35 @@ export const calculateElbowMethod = async (
   // Limit maxK to data length - 1
   maxK = Math.min(maxK, data.length - 1);
 
-  // Pra-pemrosesan data
-  const { processedData } = preprocessData(data);
-
   // Ekstrak fitur untuk clustering
-  const features = processedData.map(row => {
+  const features = data.map(row => {
     const values: number[] = [];
-    Object.keys(row).forEach(key => {
-      if (key !== 'id' && key !== 'cluster') {
-        values.push(row[key]);
+    numericalColumns.forEach(column => {
+      const value = Number(row[column]);
+      if (!isNaN(value)) {
+        values.push(value);
       }
     });
     return values;
-  });
+  }).filter(row => row.length > 0);
+
+  if (features.length === 0) {
+    throw new Error('Tidak ada data numerik yang valid untuk clustering');
+  }
 
   // Calculate inertia for different K values
   const inertiaValues: number[] = [];
   for (let k = 1; k <= maxK; k++) {
-    const result = await KMeans.kmeans(features, k, {
-      seed: 42,
-      maxIterations: 100,
-    });
-    inertiaValues.push(result.inertia);
+    try {
+      const result = kmeans(features, k, {
+        seed: 42,
+        maxIterations: 100,
+      });
+      inertiaValues.push(result.withinClusterMSE || 0);
+    } catch (error) {
+      console.warn(`Error calculating inertia for k=${k}:`, error);
+      inertiaValues.push(0);
+    }
   }
 
   return inertiaValues;
@@ -64,34 +70,48 @@ export const performKMeansClustering = async (
     throw new Error('Data tidak boleh kosong');
   }
 
-  // Pra-pemrosesan data
-  const { processedData, encodingMaps, columnStats } = preprocessData(data);
+  if (k < 1 || k > data.length) {
+    throw new Error(`Jumlah cluster (k=${k}) tidak valid. Harus antara 1 dan ${data.length}`);
+  }
 
   // Ekstrak fitur untuk clustering
-  const features = processedData.map(row => {
+  const features = data.map(row => {
     const values: number[] = [];
-    Object.keys(row).forEach(key => {
-      if (key !== 'id' && key !== 'cluster') {
-        values.push(row[key]);
+    numericalColumns.forEach(column => {
+      const value = Number(row[column]);
+      if (!isNaN(value)) {
+        values.push(value);
       }
     });
     return values;
-  });
+  }).filter(row => row.length > 0);
+
+  if (features.length === 0) {
+    throw new Error('Tidak ada data numerik yang valid untuk clustering');
+  }
+
+  if (features.length < k) {
+    throw new Error(`Jumlah data (${features.length}) kurang dari jumlah cluster (${k})`);
+  }
 
   // Run K-Means
-  const result = await KMeans.kmeans(features, k, {
+  const result = kmeans(features, k, {
     seed: 42,
     maxIterations: 100,
   });
 
   // Count cluster sizes
   const clusterSizes = Array(k).fill(0);
-  result.clusters.forEach(cluster => clusterSizes[cluster]++);
+  result.clusters.forEach(cluster => {
+    if (cluster >= 0 && cluster < k) {
+      clusterSizes[cluster]++;
+    }
+  });
 
   // Add cluster assignments to original data
   const clusteredData = data.map((point, i) => ({
     ...point,
-    cluster: result.clusters[i],
+    cluster: result.clusters[i] || 0,
   }));
 
   return {
@@ -99,6 +119,6 @@ export const performKMeansClustering = async (
     centroids: result.centroids,
     clusterSizes,
     data: clusteredData,
-    inertiaValues: [result.inertia],
+    inertiaValues: [result.withinClusterMSE || 0],
   };
 };
