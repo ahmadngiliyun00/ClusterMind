@@ -1,5 +1,4 @@
 import kmeans from 'ml-kmeans';
-import euclidean from 'ml-distance/lib/euclidean';
 import { DataPoint } from './csv';
 
 export interface ClusteringResult {
@@ -201,7 +200,7 @@ export const calculateElbowMethod = async (
         seed: 42,
         maxIterations: 100,
         initialization: 'random',
-        distanceFunction: euclidean
+        distanceFunction: calculateEuclideanDistance
       });
       
       // Calculate WCSS using Euclidean distance
@@ -266,12 +265,12 @@ export const performKMeansClustering = async (
   }
 
   try {
-    // Run K-Means with Euclidean distance function
+    // Run K-Means with custom Euclidean distance function
     const result = kmeans(features, k, {
       seed: 42,
       maxIterations: 100,
       initialization: 'random',
-      distanceFunction: euclidean
+      distanceFunction: calculateEuclideanDistance
     });
 
     // Validate result
