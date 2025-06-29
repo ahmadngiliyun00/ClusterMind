@@ -24,6 +24,12 @@ const calculateDaviesBouldinIndex = (
 
   // Calculate within-cluster scatter for each cluster
   const withinClusterScatter = centroids.map((centroid, i) => {
+    // Validate centroid is an array
+    if (!Array.isArray(centroid)) {
+      console.warn(`Centroid ${i} is not an array:`, centroid);
+      return 0;
+    }
+
     const clusterPoints = data.filter((_, idx) => clusters[idx] === i);
     if (clusterPoints.length === 0) return 0;
     
@@ -43,6 +49,12 @@ const calculateDaviesBouldinIndex = (
     betweenClusterDistances[i] = [];
     for (let j = 0; j < k; j++) {
       if (i !== j) {
+        // Validate both centroids are arrays
+        if (!Array.isArray(centroids[i]) || !Array.isArray(centroids[j])) {
+          betweenClusterDistances[i][j] = Infinity;
+          continue;
+        }
+
         const distance = Math.sqrt(
           centroids[i].reduce((acc, val, idx) => acc + Math.pow(val - centroids[j][idx], 2), 0)
         );
@@ -85,6 +97,12 @@ const calculateAvgWithinCentroidDistance = (
     if (clusterIdx >= 0 && clusterIdx < centroids.length) {
       const centroid = centroids[clusterIdx];
       
+      // Validate centroid is an array
+      if (!Array.isArray(centroid)) {
+        console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
+        return;
+      }
+
       const distance = Math.sqrt(
         point.reduce((acc, val, i) => acc + Math.pow(val - centroid[i], 2), 0)
       );
@@ -157,6 +175,13 @@ export const calculateElbowMethod = async (
         const clusterIdx = result.clusters[idx];
         if (clusterIdx >= 0 && clusterIdx < result.centroids.length) {
           const centroid = result.centroids[clusterIdx];
+          
+          // Validate centroid is an array
+          if (!Array.isArray(centroid)) {
+            console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
+            return;
+          }
+
           const distance = point.reduce((sum, val, i) => {
             return sum + Math.pow(val - centroid[i], 2);
           }, 0);
@@ -220,6 +245,11 @@ export const performKMeansClustering = async (
       throw new Error('Hasil clustering tidak valid');
     }
 
+    // Validate centroids structure
+    if (!Array.isArray(result.centroids)) {
+      throw new Error('Centroids tidak dalam format array yang benar');
+    }
+
     // Count cluster sizes
     const clusterSizes = Array(k).fill(0);
     result.clusters.forEach(cluster => {
@@ -247,6 +277,13 @@ export const performKMeansClustering = async (
       const clusterIdx = result.clusters[idx];
       if (clusterIdx >= 0 && clusterIdx < result.centroids.length) {
         const centroid = result.centroids[clusterIdx];
+        
+        // Validate centroid is an array
+        if (!Array.isArray(centroid)) {
+          console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
+          return;
+        }
+
         const distance = point.reduce((sum, val, i) => {
           return sum + Math.pow(val - centroid[i], 2);
         }, 0);
