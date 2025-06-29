@@ -22,9 +22,8 @@ interface ClusterExperiment {
 interface ExperimentResult extends ClusteringResult {
   experimentName: string;
   k: number;
-  avgWithinCentroidDistance: number;
-  avgWithinCentroidDistancePerCluster: { [key: string]: number };
   daviesBouldinIndex: number;
+  wcss: number;
 }
 
 function App() {
@@ -34,7 +33,7 @@ function App() {
   const [normalizedData, setNormalizedData] = useState<ParsedData | null>(null);
   const [experimentResults, setExperimentResults] = useState<ExperimentResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [inertiaValues, setInertiaValues] = useState<number[] | null>(null);
+  const [elbowData, setElbowData] = useState<{ wcss: number[]; dbi: number[] } | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [showAbout, setShowAbout] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -49,7 +48,7 @@ function App() {
       setNumericalData(null);
       setNormalizedData(null);
       setExperimentResults([]);
-      setInertiaValues(null);
+      setElbowData(null);
       setActiveStep(2);
       setShowAbout(false);
     } catch (error) {
@@ -115,9 +114,8 @@ function App() {
             ...result,
             experimentName: experiment.name,
             k: experiment.k,
-            avgWithinCentroidDistance: result.avgWithinCentroidDistance || 0,
-            avgWithinCentroidDistancePerCluster: result.avgWithinCentroidDistancePerCluster || {},
-            daviesBouldinIndex: result.daviesBouldinIndex || 0
+            daviesBouldinIndex: result.daviesBouldinIndex || 0,
+            wcss: result.wcss || 0
           });
         } catch (error) {
           console.error(`Error in experiment ${experiment.name}:`, error);
@@ -146,11 +144,11 @@ function App() {
     
     try {
       setIsLoading(true);
-      const inertia = await calculateElbowMethod(
+      const elbowResult = await calculateElbowMethod(
         normalizedData.data,
         normalizedData.numericalColumns
       );
-      setInertiaValues(inertia);
+      setElbowData(elbowResult);
       setActiveStep(6);
     } catch (error) {
       console.error('Error calculating elbow method:', error);
@@ -211,7 +209,7 @@ function App() {
     setNumericalData(null);
     setNormalizedData(null);
     setExperimentResults([]);
-    setInertiaValues(null);
+    setElbowData(null);
     setActiveStep(1);
     setShowAbout(true);
     setActiveTab(0);
@@ -318,7 +316,7 @@ function App() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2 text-indigo-700">Metrik Lengkap</h3>
                   <p className="text-gray-700 text-sm">
-                    Davies-Bouldin Index dan Within-Centroid Distance per cluster dan keseluruhan.
+                    Davies-Bouldin Index dan WCSS untuk evaluasi kualitas cluster yang komprehensif.
                   </p>
                 </div>
                 
@@ -328,7 +326,7 @@ function App() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2 text-indigo-700">Metode Elbow</h3>
                   <p className="text-gray-700 text-sm">
-                    Tentukan jumlah cluster optimal dengan analisis Metode Elbow.
+                    Tentukan jumlah cluster optimal dengan analisis WCSS dan DBI.
                   </p>
                 </div>
                 
@@ -556,48 +554,27 @@ function App() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="bg-blue-50 p-4 rounded-lg">
                             <h3 className="text-sm font-medium text-blue-700 mb-1">
-                              Avg. Within Centroid Distance
+                              Davies-Bouldin Index
                             </h3>
                             <p className="text-2xl font-bold text-blue-900">
-                              {experimentResults[activeTab].avgWithinCentroidDistance.toFixed(3)}
+                              {experimentResults[activeTab].daviesBouldinIndex.toFixed(3)}
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
-                              Semakin kecil semakin baik (Euclidean Distance)
+                              Semakin kecil semakin baik
                             </p>
                           </div>
                           <div className="bg-green-50 p-4 rounded-lg">
                             <h3 className="text-sm font-medium text-green-700 mb-1">
-                              Davies Bouldin Index
+                              WCSS (Within-Cluster Sum of Squares)
                             </h3>
                             <p className="text-2xl font-bold text-green-900">
-                              {experimentResults[activeTab].daviesBouldinIndex.toFixed(3)}
+                              {experimentResults[activeTab].wcss.toFixed(3)}
                             </p>
                             <p className="text-xs text-green-600 mt-1">
                               Semakin kecil semakin baik
                             </p>
                           </div>
                         </div>
-
-                        {/* Per-Cluster Metrics */}
-                        {experimentResults[activeTab].avgWithinCentroidDistancePerCluster && (
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Avg. Within Centroid Distance per Cluster
-                            </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                              {Object.entries(experimentResults[activeTab].avgWithinCentroidDistancePerCluster).map(([cluster, distance]) => (
-                                <div key={cluster} className="bg-white p-3 rounded border">
-                                  <div className="text-xs text-gray-500 uppercase tracking-wider">
-                                    {cluster.replace('_', ' ')}
-                                  </div>
-                                  <div className="text-lg font-semibold text-gray-900">
-                                    {distance.toFixed(3)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
 
                         {/* Cluster Result */}
                         <ClusterResult
@@ -619,10 +596,11 @@ function App() {
               )}
 
               {/* Step 6: Elbow Analysis */}
-              {activeStep >= 6 && inertiaValues && (
+              {activeStep >= 6 && elbowData && (
                 <section>
                   <ElbowAnalysis
-                    inertiaValues={inertiaValues}
+                    wcssValues={elbowData.wcss}
+                    dbiValues={elbowData.dbi}
                     onBack={() => setActiveStep(5)}
                     onReset={handleReset}
                   />

@@ -1,4 +1,4 @@
-import kmeans from 'ml-kmeans';
+import { kmeans } from 'ml-kmeans';
 import { DataPoint } from './csv';
 
 export interface ClusteringResult {
@@ -7,9 +7,8 @@ export interface ClusteringResult {
   clusterSizes: number[];
   data: DataPoint[];
   inertiaValues?: number[];
-  avgWithinCentroidDistance?: number;
-  avgWithinCentroidDistancePerCluster?: { [key: string]: number };
   daviesBouldinIndex?: number;
+  wcss?: number;
 }
 
 /**
@@ -17,6 +16,10 @@ export interface ClusteringResult {
  */
 const calculateEuclideanDistance = (point1: number[], point2: number[]): number => {
   if (!Array.isArray(point1) || !Array.isArray(point2)) {
+    return 0;
+  }
+  
+  if (point1.length !== point2.length) {
     return 0;
   }
   
@@ -36,37 +39,36 @@ const calculateDaviesBouldinIndex = (
   const k = centroids.length;
   if (k <= 1) return 0;
 
-  // Calculate within-cluster scatter for each cluster using Euclidean distance
-  const withinClusterScatter = centroids.map((centroid, i) => {
-    // Validate centroid is an array
-    if (!Array.isArray(centroid)) {
-      console.warn(`Centroid ${i} is not an array:`, centroid);
-      return 0;
-    }
-
+  // Calculate within-cluster scatter (average distance to centroid) for each cluster
+  const withinClusterScatter: number[] = [];
+  
+  for (let i = 0; i < k; i++) {
     const clusterPoints = data.filter((_, idx) => clusters[idx] === i);
-    if (clusterPoints.length === 0) return 0;
     
-    const sumDistances = clusterPoints.reduce((sum, point) => {
-      const distance = calculateEuclideanDistance(point, centroid);
-      return sum + distance;
+    if (clusterPoints.length === 0) {
+      withinClusterScatter[i] = 0;
+      continue;
+    }
+    
+    const centroid = centroids[i];
+    if (!Array.isArray(centroid)) {
+      withinClusterScatter[i] = 0;
+      continue;
+    }
+    
+    const totalDistance = clusterPoints.reduce((sum, point) => {
+      return sum + calculateEuclideanDistance(point, centroid);
     }, 0);
     
-    return sumDistances / clusterPoints.length;
-  });
+    withinClusterScatter[i] = totalDistance / clusterPoints.length;
+  }
 
-  // Calculate between-cluster distances using Euclidean distance
+  // Calculate between-cluster distances (distance between centroids)
   const betweenClusterDistances: number[][] = [];
   for (let i = 0; i < k; i++) {
     betweenClusterDistances[i] = [];
     for (let j = 0; j < k; j++) {
       if (i !== j) {
-        // Validate both centroids are arrays
-        if (!Array.isArray(centroids[i]) || !Array.isArray(centroids[j])) {
-          betweenClusterDistances[i][j] = Infinity;
-          continue;
-        }
-
         const distance = calculateEuclideanDistance(centroids[i], centroids[j]);
         betweenClusterDistances[i][j] = distance;
       } else {
@@ -92,60 +94,27 @@ const calculateDaviesBouldinIndex = (
 };
 
 /**
- * Calculate average within-centroid distance (overall and per cluster)
+ * Calculate Within-Cluster Sum of Squares (WCSS)
  */
-const calculateAvgWithinCentroidDistance = (
+const calculateWCSS = (
   data: number[][],
   clusters: number[],
   centroids: number[][]
-): {
-  overall: number;
-  perCluster: { [key: string]: number };
-} => {
-  let totalDistance = 0;
-  let totalPoints = 0;
-  const perClusterDistances: { [key: number]: { sum: number; count: number } } = {};
-
-  // Initialize per-cluster tracking
-  centroids.forEach((_, i) => {
-    perClusterDistances[i] = { sum: 0, count: 0 };
-  });
-
+): number => {
+  let wcss = 0;
+  
   data.forEach((point, idx) => {
     const clusterIdx = clusters[idx];
     if (clusterIdx >= 0 && clusterIdx < centroids.length) {
       const centroid = centroids[clusterIdx];
-      
-      // Validate centroid is an array
-      if (!Array.isArray(centroid)) {
-        console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
-        return;
+      if (Array.isArray(centroid)) {
+        const distance = calculateEuclideanDistance(point, centroid);
+        wcss += distance * distance; // Square the distance for WCSS
       }
-
-      const distance = calculateEuclideanDistance(point, centroid);
-      
-      // Overall statistics
-      totalDistance += distance;
-      totalPoints++;
-      
-      // Per-cluster statistics
-      perClusterDistances[clusterIdx].sum += distance;
-      perClusterDistances[clusterIdx].count++;
     }
   });
-
-  // Calculate per-cluster averages
-  const perCluster: { [key: string]: number } = {};
-  Object.keys(perClusterDistances).forEach(clusterIdx => {
-    const cluster = parseInt(clusterIdx);
-    const { sum, count } = perClusterDistances[cluster];
-    perCluster[`cluster_${cluster}`] = count > 0 ? sum / count : 0;
-  });
-
-  return {
-    overall: totalPoints > 0 ? totalDistance / totalPoints : 0,
-    perCluster
-  };
+  
+  return wcss;
 };
 
 /**
@@ -167,13 +136,13 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
 };
 
 /**
- * Calculate inertia values for different K values to determine optimal number of clusters
+ * Calculate elbow method data (WCSS and DBI for different K values)
  */
 export const calculateElbowMethod = async (
   data: DataPoint[],
   numericalColumns: string[],
   maxK: number = 10
-): Promise<number[]> => {
+): Promise<{ wcss: number[]; dbi: number[] }> => {
   if (!data || data.length === 0) {
     throw new Error('Data tidak boleh kosong');
   }
@@ -189,52 +158,64 @@ export const calculateElbowMethod = async (
     throw new Error('Tidak ada data numerik yang valid untuk clustering');
   }
 
-  // Limit maxK to data length - 1
-  maxK = Math.min(maxK, features.length - 1);
+  // Limit maxK to reasonable bounds
+  maxK = Math.min(maxK, Math.floor(features.length / 2));
 
-  // Calculate inertia for different K values
-  const inertiaValues: number[] = [];
+  const wcssValues: number[] = [];
+  const dbiValues: number[] = [];
+
   for (let k = 1; k <= maxK; k++) {
     try {
+      if (k === 1) {
+        // For k=1, calculate total variance as WCSS
+        const centroid = features[0].map((_, colIdx) => {
+          return features.reduce((sum, row) => sum + row[colIdx], 0) / features.length;
+        });
+        
+        const wcss = features.reduce((sum, point) => {
+          const distance = calculateEuclideanDistance(point, centroid);
+          return sum + distance * distance;
+        }, 0);
+        
+        wcssValues.push(wcss);
+        dbiValues.push(0); // DBI is undefined for k=1
+        continue;
+      }
+
       const result = kmeans(features, k, {
         seed: 42,
         maxIterations: 100,
-        initialization: 'random',
-        distanceFunction: calculateEuclideanDistance
+        initialization: 'random'
       });
       
-      // Calculate WCSS using Euclidean distance
-      let wcss = 0;
-      features.forEach((point, idx) => {
-        const clusterIdx = result.clusters[idx];
-        if (clusterIdx >= 0 && clusterIdx < result.centroids.length) {
-          const centroid = result.centroids[clusterIdx];
-          
-          // Validate centroid is an array
-          if (!Array.isArray(centroid)) {
-            console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
-            return;
-          }
+      if (!result.clusters || !result.centroids) {
+        throw new Error(`Invalid clustering result for k=${k}`);
+      }
 
-          const distance = calculateEuclideanDistance(point, centroid);
-          wcss += distance * distance; // Square the distance for WCSS
-        }
-      });
-      
-      inertiaValues.push(wcss);
+      // Calculate WCSS
+      const wcss = calculateWCSS(features, result.clusters, result.centroids);
+      wcssValues.push(wcss);
+
+      // Calculate Davies-Bouldin Index
+      const dbi = calculateDaviesBouldinIndex(features, result.clusters, result.centroids);
+      dbiValues.push(dbi);
+
     } catch (error) {
-      console.warn(`Error calculating inertia for k=${k}:`, error);
-      // Use previous value or a reasonable estimate
-      const prevValue = inertiaValues[inertiaValues.length - 1] || 1000;
-      inertiaValues.push(prevValue * 0.8);
+      console.warn(`Error calculating metrics for k=${k}:`, error);
+      // Use reasonable fallback values
+      const prevWCSS = wcssValues[wcssValues.length - 1] || 1000;
+      const prevDBI = dbiValues[dbiValues.length - 1] || 1;
+      
+      wcssValues.push(prevWCSS * 0.8);
+      dbiValues.push(prevDBI * 1.1);
     }
   }
 
-  return inertiaValues;
+  return { wcss: wcssValues, dbi: dbiValues };
 };
 
 /**
- * Perform K-Means clustering on data using Euclidean distance
+ * Perform K-Means clustering on data
  */
 export const performKMeansClustering = async (
   data: DataPoint[],
@@ -265,12 +246,11 @@ export const performKMeansClustering = async (
   }
 
   try {
-    // Run K-Means with custom Euclidean distance function
+    // Run K-Means
     const result = kmeans(features, k, {
       seed: 42,
       maxIterations: 100,
-      initialization: 'random',
-      distanceFunction: calculateEuclideanDistance
+      initialization: 'random'
     });
 
     // Validate result
@@ -279,8 +259,8 @@ export const performKMeansClustering = async (
     }
 
     // Validate centroids structure
-    if (!Array.isArray(result.centroids)) {
-      throw new Error('Centroids tidak dalam format array yang benar');
+    if (!Array.isArray(result.centroids) || result.centroids.length !== k) {
+      throw new Error('Centroids tidak dalam format yang benar');
     }
 
     // Count cluster sizes
@@ -291,33 +271,15 @@ export const performKMeansClustering = async (
       }
     });
 
-    // Calculate evaluation metrics using Euclidean distance
-    const { overall: avgWithinCentroidDistance, perCluster: avgWithinCentroidDistancePerCluster } = 
-      calculateAvgWithinCentroidDistance(features, result.clusters, result.centroids);
-
+    // Calculate evaluation metrics
     const daviesBouldinIndex = calculateDaviesBouldinIndex(
       features,
       result.clusters,
       result.centroids
     );
 
-    // Calculate WCSS using Euclidean distance
-    let wcss = 0;
-    features.forEach((point, idx) => {
-      const clusterIdx = result.clusters[idx];
-      if (clusterIdx >= 0 && clusterIdx < result.centroids.length) {
-        const centroid = result.centroids[clusterIdx];
-        
-        // Validate centroid is an array
-        if (!Array.isArray(centroid)) {
-          console.warn(`Centroid ${clusterIdx} is not an array:`, centroid);
-          return;
-        }
-
-        const distance = calculateEuclideanDistance(point, centroid);
-        wcss += distance * distance; // Square the distance for WCSS
-      }
-    });
+    // Calculate WCSS
+    const wcss = calculateWCSS(features, result.clusters, result.centroids);
 
     // Add cluster assignments to original data
     const clusteredData = data.map((point, i) => ({
@@ -330,10 +292,8 @@ export const performKMeansClustering = async (
       centroids: result.centroids,
       clusterSizes,
       data: clusteredData,
-      inertiaValues: [wcss],
-      avgWithinCentroidDistance,
-      avgWithinCentroidDistancePerCluster,
-      daviesBouldinIndex
+      daviesBouldinIndex,
+      wcss
     };
   } catch (error) {
     console.error('Error in K-Means clustering:', error);
