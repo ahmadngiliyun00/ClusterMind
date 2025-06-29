@@ -70,7 +70,7 @@ function App() {
       setActiveStep(3);
     } catch (error) {
       console.error('Error converting nominal to numerical:', error);
-      alert('Terjadi kesalahan saat mengkonversi data nominal ke numerik.');
+      alert('Terjadi kesalahan saat mengkonversi data nominal ke numerik: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +88,7 @@ function App() {
       setActiveStep(4);
     } catch (error) {
       console.error('Error normalizing data:', error);
-      alert('Terjadi kesalahan saat melakukan normalisasi data.');
+      alert('Terjadi kesalahan saat melakukan normalisasi data: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -103,19 +103,28 @@ function App() {
       const results: ExperimentResult[] = [];
       
       for (const experiment of experiments) {
-        const result = await performKMeansClustering(
-          normalizedData.data,
-          normalizedData.numericalColumns,
-          experiment.k
-        );
-        
-        results.push({
-          ...result,
-          experimentName: experiment.name,
-          k: experiment.k,
-          avgWithinCentroidDistance: result.avgWithinCentroidDistance || 0,
-          daviesBouldinIndex: result.daviesBouldinIndex || 0
-        });
+        try {
+          const result = await performKMeansClustering(
+            normalizedData.data,
+            normalizedData.numericalColumns,
+            experiment.k
+          );
+          
+          results.push({
+            ...result,
+            experimentName: experiment.name,
+            k: experiment.k,
+            avgWithinCentroidDistance: result.avgWithinCentroidDistance || 0,
+            daviesBouldinIndex: result.daviesBouldinIndex || 0
+          });
+        } catch (error) {
+          console.error(`Error in experiment ${experiment.name}:`, error);
+          // Continue with other experiments
+        }
+      }
+      
+      if (results.length === 0) {
+        throw new Error('Tidak ada eksperimen yang berhasil dijalankan');
       }
       
       setExperimentResults(results);
@@ -123,7 +132,7 @@ function App() {
       setActiveTab(0); // Reset to first tab
     } catch (error) {
       console.error('Error performing clustering experiments:', error);
-      alert('Terjadi kesalahan saat melakukan eksperimen clustering.');
+      alert('Terjadi kesalahan saat melakukan eksperimen clustering: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +152,7 @@ function App() {
       setActiveStep(6);
     } catch (error) {
       console.error('Error calculating elbow method:', error);
-      alert('Terjadi kesalahan saat menghitung metode elbow.');
+      alert('Terjadi kesalahan saat menghitung metode elbow: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
