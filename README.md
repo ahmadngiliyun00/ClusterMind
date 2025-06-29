@@ -7,6 +7,7 @@ ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda me
 **🚀 Built with [Bolt.new](https://bolt.new) - Participating in World's Largest Hackathon presented by Bolt**
 
 ![ClusterMind Screenshot](https://drive.google.com/u/0/drive-viewer/AKGpihZHrIpvCgA-UkcOjyxHeKKol5z_dXCr6xR03ivXKcxTts7GB3wc2kc9BtADCfWLf0hhQ9lV8tvYNi9u1JbJ7OLZt9FOjENDpA=s1600-rw-v1)
+<iframe src="https://drive.google.com/file/d/1kyefm6-rikxjHVrjhPkIm2uhZzwJzM8t/preview" width="640" height="480" allow="autoplay"></iframe>
 
 ## ✨ Fitur Utama
 
