@@ -6,7 +6,7 @@ ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda me
 
 **🚀 Built with [Bolt.new](https://bolt.new) - Participating in World's Largest Hackathon presented by Bolt**
 
-![ClusterMind Screenshot](https://github.com/ahmadngiliyun00/ClusterMind/blob/6391bdfcf681c65a48561de98356e6bcb0f061e3/src/about-clustermind.png)
+![ClusterMind Screenshot](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/00-about-clustermind.png)
 
 ## ✨ Fitur Utama
 
@@ -84,16 +84,21 @@ npm run preview
 - Drag & drop atau pilih file CSV/Excel
 - Untuk CSV, pilih separator yang sesuai
 - File harus memiliki header dan minimal 2 kolom numerik
+![ClusterMind Upload Dataset](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/01-upload-dataset-clustermind.png)
+![ClusterMind Preview Dataset](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/02-preview-dataset-clustermind.png)
 
 ### 2. Preview & Preprocessing
 - Review struktur data dan tipe kolom
 - Konversi data kategorikal ke numerik (label encoding)
 - Normalisasi dengan Z-score transformation
+![ClusterMind Numberik Dataset](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/03-numberik-dataset-clustermind.png)
+![ClusterMind Normalisasi Dataset](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/04-normalisasi-dataset-clustermind.png)
 
 ### 3. Konfigurasi Clustering
 - Tentukan jumlah eksperimen (minimal 5)
 - Set nilai K untuk setiap eksperimen
 - Jalankan clustering dengan algoritma K-Means
+![ClusterMind Konfigurasi Algoritma](https://github.com/ahmadngiliyun00/ClusterMind/blob/3fbaa65ad7c562987a1b991286b04808d2bf4e6c/src/05-konfigurasi-algoritma-clustermind.png)
 
 ### 4. Analisis Hasil
 - Bandingkan metrik antar eksperimen
