@@ -1,6 +1,5 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { preprocessData } from './preprocessing';
 
 export interface DataPoint {
   [key: string]: any;
@@ -15,6 +14,48 @@ export interface ParsedData {
   categoricalColumns: string[];
   encodingMaps?: any;
   columnStats?: any;
+}
+
+/**
+ * Identify column types from raw data without processing
+ */
+export function identifyColumnTypes(data: DataPoint[]): {
+  categoricalColumns: string[];
+  numericalColumns: string[];
+} {
+  if (!data || data.length === 0) {
+    return { categoricalColumns: [], numericalColumns: [] };
+  }
+
+  const columns = Object.keys(data[0]);
+  const categoricalColumns: string[] = [];
+  const numericalColumns: string[] = [];
+
+  columns.forEach(column => {
+    // Skip kolom id dan cluster
+    if (column === 'id' || column === 'cluster') return;
+
+    // Cek tipe data kolom berdasarkan sampel data
+    const sampleValues = data.slice(0, Math.min(100, data.length))
+      .map(row => row[column])
+      .filter(val => val !== null && val !== undefined && val !== '');
+
+    if (sampleValues.length === 0) return;
+
+    // Cek apakah semua nilai bisa dikonversi ke number
+    const isNumeric = sampleValues.every(val => {
+      const num = Number(val);
+      return !isNaN(num) && isFinite(num);
+    });
+
+    if (isNumeric) {
+      numericalColumns.push(column);
+    } else {
+      categoricalColumns.push(column);
+    }
+  });
+
+  return { categoricalColumns, numericalColumns };
 }
 
 /**
@@ -52,22 +93,14 @@ const parseExcel = (file: File): Promise<ParsedData> => {
           return obj;
         }).filter(row => Object.values(row).some(val => val !== null && val !== undefined && val !== ''));
 
-        // Preprocess data
-        const {
-          processedData,
-          encodingMaps,
-          columnStats,
-          categoricalColumns,
-          numericalColumns
-        } = preprocessData(dataRows);
+        // Identify column types from raw data
+        const { categoricalColumns, numericalColumns } = identifyColumnTypes(dataRows);
 
         resolve({
-          data: processedData,
+          data: dataRows,
           headers,
           numericalColumns,
-          categoricalColumns,
-          encodingMaps,
-          columnStats
+          categoricalColumns
         });
       } catch (error) {
         reject(new Error('Gagal memproses file Excel: ' + (error as Error).message));
@@ -89,7 +122,7 @@ const parseCSV = (file: File, separator: string = ','): Promise<ParsedData> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
-      dynamicTyping: true,
+      dynamicTyping: false, // Keep as strings to preserve original data
       delimiter: separator,
       skipEmptyLines: true,
       complete: (results) => {
@@ -114,22 +147,14 @@ const parseCSV = (file: File, separator: string = ','): Promise<ParsedData> => {
             throw new Error('Tidak dapat menemukan header dalam file CSV');
           }
 
-          // Preprocess data
-          const {
-            processedData,
-            encodingMaps,
-            columnStats,
-            categoricalColumns,
-            numericalColumns
-          } = preprocessData(data);
+          // Identify column types from raw data
+          const { categoricalColumns, numericalColumns } = identifyColumnTypes(data);
 
           resolve({
-            data: processedData,
+            data,
             headers,
             numericalColumns,
-            categoricalColumns,
-            encodingMaps,
-            columnStats
+            categoricalColumns
           });
         } catch (error) {
           reject(new Error('Gagal memproses data CSV: ' + (error as Error).message));

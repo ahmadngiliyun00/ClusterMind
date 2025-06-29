@@ -63,7 +63,7 @@ function App() {
       setIsLoading(true);
       const processedData = await performNominalToNumerical(rawData);
       setNumericalData(processedData);
-      setActiveStep(3);
+      setActiveStep(4); // Skip to normalization step
     } catch (error) {
       console.error('Error converting nominal to numerical:', error);
       alert('Terjadi kesalahan saat mengkonversi data nominal ke numerik.');
@@ -74,13 +74,14 @@ function App() {
 
   // Handle normalization
   const handleNormalization = async () => {
-    if (!numericalData) return;
+    const dataToNormalize = numericalData || rawData;
+    if (!dataToNormalize) return;
     
     try {
       setIsLoading(true);
-      const normalizedResult = await performNormalization(numericalData);
+      const normalizedResult = await performNormalization(dataToNormalize);
       setNormalizedData(normalizedResult);
-      setActiveStep(4);
+      setActiveStep(5);
     } catch (error) {
       console.error('Error normalizing data:', error);
       alert('Terjadi kesalahan saat melakukan normalisasi data.');
@@ -112,7 +113,6 @@ function App() {
       }
       
       setExperimentResults(results);
-      setActiveStep(5);
     } catch (error) {
       console.error('Error performing clustering experiments:', error);
       alert('Terjadi kesalahan saat melakukan eksperimen clustering.');
@@ -149,6 +149,34 @@ function App() {
     setInertiaValues(null);
     setActiveStep(1);
     setShowAbout(true);
+  };
+
+  // Determine next step logic
+  const getNextStepInfo = () => {
+    if (!rawData) return null;
+    
+    if (rawData.numericalColumns.length === 0) {
+      // All categorical - need conversion
+      return {
+        nextStep: 3,
+        buttonText: "Konversi ke Numerik",
+        action: handleNominalToNumerical
+      };
+    } else if (rawData.categoricalColumns.length > 0) {
+      // Mixed data - need conversion
+      return {
+        nextStep: 3,
+        buttonText: "Konversi ke Numerik",
+        action: handleNominalToNumerical
+      };
+    } else {
+      // All numerical - skip to normalization
+      return {
+        nextStep: 4,
+        buttonText: "Lakukan Normalisasi",
+        action: handleNormalization
+      };
+    }
   };
 
   return (
@@ -388,7 +416,7 @@ function App() {
                 </section>
               )}
 
-              {/* Step 2: Data Preview */}
+              {/* Step 2: Raw Data Preview */}
               {activeStep >= 2 && rawData && (
                 <section>
                   <DataPreview
@@ -398,14 +426,14 @@ function App() {
                     description="Berikut adalah preview data yang telah diupload. Periksa struktur data sebelum melanjutkan ke tahap berikutnya."
                     numericalColumns={rawData.numericalColumns}
                     categoricalColumns={rawData.categoricalColumns}
-                    onNext={rawData.numericalColumns.length === 0 ? handleNominalToNumerical : handleNormalization}
-                    nextButtonText={rawData.numericalColumns.length === 0 ? "Konversi ke Numerik" : "Lakukan Normalisasi"}
+                    onNext={getNextStepInfo()?.action}
+                    nextButtonText={getNextStepInfo()?.buttonText || "Lanjutkan"}
                     showNextButton={activeStep === 2}
                   />
                 </section>
               )}
 
-              {/* Step 3: Numerical Data */}
+              {/* Step 3: Numerical Data (only show if conversion happened) */}
               {activeStep >= 3 && numericalData && (
                 <section>
                   <DataPreview
