@@ -256,8 +256,8 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
       // Calculate WCSS for this result
       const wcss = calculateWCSS(features, result.clusters, result.centroids);
       
-      // Keep the result with lowest WCSS
-      if (wcss < bestWCSS && wcss > 0) {
+      // Keep the result with lowest WCSS (including zero, which indicates perfect clustering)
+      if (wcss < bestWCSS) {
         bestWCSS = wcss;
         bestResult = result;
       }
