@@ -415,7 +415,9 @@ export const calculateElbowMethod = async (
         clustersLength: result.clusters?.length,
         centroidsLength: result.centroids?.length,
         clusterSample: result.clusters?.slice(0, 10),
-        centroidSample: result.centroids?.[0]?.slice(0, 3)?.map((v: number) => v.toFixed(3))
+        centroidSample: Array.isArray(result.centroids?.[0]) 
+          ? result.centroids[0].slice(0, 3).map((v: number) => v.toFixed(3))
+          : 'N/A'
       });
       
       // Validate and fix result if needed
@@ -520,7 +522,9 @@ export const performKMeansClustering = async (
       clustersLength: result.clusters?.length,
       centroidsLength: result.centroids?.length,
       clusterSample: result.clusters?.slice(0, 10),
-      centroidSample: result.centroids?.[0]?.slice(0, 3)?.map((v: number) => v.toFixed(3))
+      centroidSample: Array.isArray(result.centroids?.[0]) 
+        ? result.centroids[0].slice(0, 3).map((v: number) => v.toFixed(3))
+        : 'N/A'
     });
 
     // Validate and fix result if needed
