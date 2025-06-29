@@ -4,6 +4,8 @@
 
 ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda melakukan clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan Z-score normalization dan Euclidean distance. Analisis data Anda langsung di browser, tanpa perlu menginstal software tambahan.
 
+**🚀 Built with [Bolt.new](https://bolt.new) - Participating in World's Largest Hackathon presented by Bolt**
+
 ![ClusterMind Screenshot](https://via.placeholder.com/800x400/6366F1/FFFFFF?text=ClusterMind+Dashboard)
 
 ## ✨ Fitur Utama
@@ -29,6 +31,17 @@ ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda me
 - **CSV**: Dengan pemilihan separator (koma, titik koma, tab, pipe)
 - **Excel**: Format XLS dan XLSX
 - **Auto-detection**: Deteksi otomatis tipe kolom (numerik/kategorikal)
+
+## 🏆 Hackathon Project
+
+Proyek ini dikembangkan untuk **World's Largest Hackathon presented by Bolt** menggunakan platform [Bolt.new](https://bolt.new). ClusterMind mendemonstrasikan kemampuan rapid prototyping dan development dengan teknologi modern untuk menciptakan solusi data analytics yang powerful dan user-friendly.
+
+### 🎯 Hackathon Goals
+- ✅ **Innovation**: Implementasi K-Means clustering dengan Z-score normalization
+- ✅ **User Experience**: Interface yang intuitif untuk non-technical users
+- ✅ **Performance**: Clustering yang berjalan langsung di browser
+- ✅ **Scalability**: Support multiple file formats dan data preprocessing
+- ✅ **Visualization**: Interactive charts dan comprehensive metrics
 
 ## 🚀 Quick Start
 
@@ -142,6 +155,11 @@ Clustering untuk:
 - **Euclidean Distance** - Distance metric
 - **Label Encoding** - Categorical data conversion
 
+### Development Platform
+- **[Bolt.new](https://bolt.new)** - AI-powered full-stack development platform
+- **WebContainer** - Browser-based Node.js runtime
+- **Instant Deployment** - Real-time preview dan deployment
+
 ## 📊 Metrik Evaluasi
 
 ### Davies-Bouldin Index
@@ -203,6 +221,27 @@ clustermind/
 └── README.md              # Documentation
 ```
 
+## 🏆 Hackathon Features
+
+### 🚀 Rapid Development
+Dikembangkan menggunakan Bolt.new untuk mendemonstrasikan:
+- **Speed**: From concept to working prototype dalam waktu singkat
+- **AI-Assisted Coding**: Leveraging AI untuk accelerated development
+- **Modern Stack**: React + TypeScript + Tailwind CSS
+- **Real-time Preview**: Instant feedback loop selama development
+
+### 🎨 User-Centric Design
+- **Intuitive Workflow**: Step-by-step guided process
+- **Responsive Design**: Works on desktop dan mobile
+- **Accessibility**: Keyboard navigation dan screen reader support
+- **Progressive Disclosure**: Complex features revealed gradually
+
+### 🔬 Advanced Analytics
+- **Multiple Algorithms**: K-Means dengan berbagai distance metrics
+- **Statistical Validation**: Comprehensive evaluation metrics
+- **Interactive Visualization**: Real-time charts dan graphs
+- **Export Capabilities**: Results dapat di-export untuk further analysis
+
 ## 🤝 Contributing
 
 Kontribusi sangat diterima! Silakan:
@@ -225,6 +264,8 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 🙏 Acknowledgments
 
+- **[Bolt.new](https://bolt.new)** - AI-powered development platform yang memungkinkan rapid prototyping
+- **World's Largest Hackathon** - Platform untuk innovation dan collaboration
 - [ml-kmeans](https://github.com/mljs/kmeans) - K-Means clustering implementation
 - [PapaParse](https://www.papaparse.com/) - CSV parsing library
 - [Recharts](https://recharts.org/) - Chart library for React
@@ -243,4 +284,6 @@ Jika Anda mengalami masalah atau memiliki pertanyaan:
 
 **ClusterMind** - Transforming data into actionable insights through intelligent clustering.
 
-*Made with ❤️ for data enthusiasts and researchers worldwide.*
+*Made with ❤️ using [Bolt.new](https://bolt.new) for World's Largest Hackathon presented by Bolt*
+
+*Empowering data enthusiasts and researchers worldwide with AI-assisted development.*
