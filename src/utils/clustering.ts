@@ -1,5 +1,5 @@
 import kmeans from 'ml-kmeans';
-import euclidean from 'ml-distance/lib/euclidean';
+import { euclidean } from 'ml-distance';
 import { DataPoint } from './csv';
 
 export interface ClusteringResult {
