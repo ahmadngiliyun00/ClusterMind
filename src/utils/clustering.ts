@@ -1,4 +1,4 @@
-import { kmeans } from 'ml-kmeans';
+import kmeans from 'ml-kmeans';
 import { DataPoint } from './csv';
 
 export interface ClusteringResult {
