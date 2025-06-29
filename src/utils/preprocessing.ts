@@ -9,8 +9,10 @@ export interface EncodingMap {
 
 // Interface untuk menyimpan statistik kolom numerik
 export interface ColumnStats {
-  min: number;
-  max: number;
+  mean: number;
+  std: number;
+  min?: number;
+  max?: number;
 }
 
 /**
@@ -86,7 +88,51 @@ export function labelEncoding(data: DataPoint[], categoricalColumns: string[]): 
 }
 
 /**
- * Normalisasi data numerik menggunakan min-max scaling
+ * Normalisasi data numerik menggunakan Z-score transformation (standardization)
+ */
+export function zScoreNormalization(
+  data: DataPoint[],
+  numericalColumns: string[]
+): {
+  normalizedData: DataPoint[];
+  columnStats: { [key: string]: ColumnStats };
+} {
+  const columnStats: { [key: string]: ColumnStats } = {};
+  const normalizedData = data.map(row => ({ ...row })); // Deep copy
+
+  numericalColumns.forEach(column => {
+    // Hitung mean dan standard deviation
+    const values = data.map(row => Number(row[column]) || 0).filter(val => isFinite(val));
+    
+    if (values.length === 0) {
+      columnStats[column] = { mean: 0, std: 1, min: 0, max: 1 };
+      return;
+    }
+    
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const std = Math.sqrt(variance);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    
+    columnStats[column] = { mean, std, min, max };
+
+    // Z-score normalization: (x - mean) / std
+    normalizedData.forEach(row => {
+      const value = Number(row[column]) || 0;
+      if (std === 0) {
+        row[column] = 0; // Jika std = 0, semua nilai sama
+      } else {
+        row[column] = (value - mean) / std;
+      }
+    });
+  });
+
+  return { normalizedData, columnStats };
+}
+
+/**
+ * Normalisasi data numerik menggunakan min-max scaling (untuk backward compatibility)
  */
 export function minMaxNormalization(
   data: DataPoint[],
@@ -103,14 +149,17 @@ export function minMaxNormalization(
     const values = data.map(row => Number(row[column]) || 0).filter(val => isFinite(val));
     
     if (values.length === 0) {
-      columnStats[column] = { min: 0, max: 1 };
+      columnStats[column] = { mean: 0, std: 1, min: 0, max: 1 };
       return;
     }
     
     const min = Math.min(...values);
     const max = Math.max(...values);
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const std = Math.sqrt(variance);
     
-    columnStats[column] = { min, max };
+    columnStats[column] = { mean, std, min, max };
 
     // Normalisasi data
     normalizedData.forEach(row => {
@@ -142,9 +191,9 @@ export function preprocessData(data: DataPoint[]): {
   // Label encoding untuk kolom kategorikal
   const { encodedData, encodingMaps } = labelEncoding(data, categoricalColumns);
 
-  // Normalisasi untuk semua kolom numerik (termasuk hasil encoding)
+  // Z-score normalization untuk semua kolom numerik (termasuk hasil encoding)
   const columnsToNormalize = [...numericalColumns, ...categoricalColumns];
-  const { normalizedData, columnStats } = minMaxNormalization(encodedData, columnsToNormalize);
+  const { normalizedData, columnStats } = zScoreNormalization(encodedData, columnsToNormalize);
 
   return {
     processedData: normalizedData,
@@ -187,10 +236,10 @@ export async function performNominalToNumerical(rawData: ParsedData): Promise<Pa
 }
 
 /**
- * Perform normalization on numerical data
+ * Perform Z-score normalization on numerical data
  */
 export async function performNormalization(numericalData: ParsedData): Promise<ParsedData> {
-  const { normalizedData, columnStats } = minMaxNormalization(
+  const { normalizedData, columnStats } = zScoreNormalization(
     numericalData.data,
     numericalData.numericalColumns
   );

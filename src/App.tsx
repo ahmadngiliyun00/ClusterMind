@@ -23,6 +23,7 @@ interface ExperimentResult extends ClusteringResult {
   experimentName: string;
   k: number;
   avgWithinCentroidDistance: number;
+  avgWithinCentroidDistancePerCluster: { [key: string]: number };
   daviesBouldinIndex: number;
 }
 
@@ -115,6 +116,7 @@ function App() {
             experimentName: experiment.name,
             k: experiment.k,
             avgWithinCentroidDistance: result.avgWithinCentroidDistance || 0,
+            avgWithinCentroidDistancePerCluster: result.avgWithinCentroidDistancePerCluster || {},
             daviesBouldinIndex: result.daviesBouldinIndex || 0
           });
         } catch (error) {
@@ -197,7 +199,7 @@ function App() {
       // All numerical - skip to normalization
       return {
         nextStep: 4,
-        buttonText: "Lakukan Normalisasi",
+        buttonText: "Lakukan Normalisasi (Z-Score)",
         action: handleNormalization
       };
     }
@@ -295,8 +297,8 @@ function App() {
               <h2 className="text-2xl font-bold mb-4 text-indigo-700">Tentang ClusterMind</h2>
               <p className="text-gray-700 mb-6">
                 ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda melakukan 
-                clustering data secara mudah dan cepat menggunakan algoritma K-Means. 
-                Analisis data Anda langsung di browser, tanpa perlu menginstal software tambahan.
+                clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan Z-score normalization 
+                dan Euclidean distance. Analisis data Anda langsung di browser, tanpa perlu menginstal software tambahan.
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -304,9 +306,9 @@ function App() {
                   <div className="bg-indigo-100 p-3 rounded-full inline-block mb-4">
                     <Brain className="h-6 w-6 text-indigo-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">Clustering Otomatis</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">K-Means + Z-Score</h3>
                   <p className="text-gray-700 text-sm">
-                    Analisis data secara cepat dengan algoritma K-Means yang berjalan di browser Anda.
+                    Clustering dengan normalisasi Z-score dan Euclidean distance untuk hasil yang optimal.
                   </p>
                 </div>
                 
@@ -314,9 +316,9 @@ function App() {
                   <div className="bg-indigo-100 p-3 rounded-full inline-block mb-4">
                     <BarChart3 className="h-6 w-6 text-indigo-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">Visualisasi Interaktif</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">Metrik Lengkap</h3>
                   <p className="text-gray-700 text-sm">
-                    Lihat hasil clustering dalam bentuk grafik dan tabel yang intuitif.
+                    Davies-Bouldin Index dan Within-Centroid Distance per cluster dan keseluruhan.
                   </p>
                 </div>
                 
@@ -375,6 +377,8 @@ function App() {
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">TypeScript</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Tailwind CSS</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">ml-kmeans</span>
+                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Z-Score Normalization</span>
+                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Euclidean Distance</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">PapaParse</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">XLSX</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Recharts</span>
@@ -422,7 +426,7 @@ function App() {
                   <span>Upload</span>
                   <span>Preview</span>
                   <span>Numerical</span>
-                  <span>Normalize</span>
+                  <span>Z-Score</span>
                   <span>Clustering</span>
                   <span>Elbow</span>
                 </div>
@@ -478,11 +482,11 @@ function App() {
                     data={numericalData.data}
                     headers={numericalData.headers}
                     title="Data telah dikonversi ke numerik"
-                    description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi."
+                    description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi dengan Z-score."
                     numericalColumns={numericalData.numericalColumns}
                     categoricalColumns={numericalData.categoricalColumns}
                     onNext={activeStep === 3 ? goToNextStep : undefined}
-                    nextButtonText="Lakukan Normalisasi"
+                    nextButtonText="Lakukan Normalisasi Z-Score"
                     showNextButton={activeStep === 3}
                     onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
@@ -495,8 +499,8 @@ function App() {
                   <DataPreview
                     data={normalizedData.data}
                     headers={normalizedData.headers}
-                    title="Data telah dinormalisasi"
-                    description="Data telah dinormalisasi menggunakan min-max scaling. Semua nilai berada dalam rentang 0-1. Data siap untuk clustering."
+                    title="Data telah dinormalisasi dengan Z-Score"
+                    description="Data telah dinormalisasi menggunakan Z-score transformation (standardization). Data memiliki mean = 0 dan standard deviation = 1. Data siap untuk clustering dengan Euclidean distance."
                     numericalColumns={normalizedData.numericalColumns}
                     categoricalColumns={normalizedData.categoricalColumns}
                     onNext={activeStep === 4 ? goToNextStep : undefined}
@@ -555,10 +559,10 @@ function App() {
                               Avg. Within Centroid Distance
                             </h3>
                             <p className="text-2xl font-bold text-blue-900">
-                              {experimentResults[activeTab].avgWithinCentroidDistance.toFixed(4)}
+                              {experimentResults[activeTab].avgWithinCentroidDistance.toFixed(3)}
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
-                              Semakin kecil semakin baik
+                              Semakin kecil semakin baik (Euclidean Distance)
                             </p>
                           </div>
                           <div className="bg-green-50 p-4 rounded-lg">
@@ -566,13 +570,34 @@ function App() {
                               Davies Bouldin Index
                             </h3>
                             <p className="text-2xl font-bold text-green-900">
-                              {experimentResults[activeTab].daviesBouldinIndex.toFixed(4)}
+                              {experimentResults[activeTab].daviesBouldinIndex.toFixed(3)}
                             </p>
                             <p className="text-xs text-green-600 mt-1">
                               Semakin kecil semakin baik
                             </p>
                           </div>
                         </div>
+
+                        {/* Per-Cluster Metrics */}
+                        {experimentResults[activeTab].avgWithinCentroidDistancePerCluster && (
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h3 className="text-sm font-medium text-gray-700 mb-3">
+                              Avg. Within Centroid Distance per Cluster
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                              {Object.entries(experimentResults[activeTab].avgWithinCentroidDistancePerCluster).map(([cluster, distance]) => (
+                                <div key={cluster} className="bg-white p-3 rounded border">
+                                  <div className="text-xs text-gray-500 uppercase tracking-wider">
+                                    {cluster.replace('_', ' ')}
+                                  </div>
+                                  <div className="text-lg font-semibold text-gray-900">
+                                    {distance.toFixed(3)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Cluster Result */}
                         <ClusterResult

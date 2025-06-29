@@ -8,8 +8,22 @@ export interface ClusteringResult {
   data: DataPoint[];
   inertiaValues?: number[];
   avgWithinCentroidDistance?: number;
+  avgWithinCentroidDistancePerCluster?: { [key: string]: number };
   daviesBouldinIndex?: number;
 }
+
+/**
+ * Calculate Euclidean distance between two points
+ */
+const calculateEuclideanDistance = (point1: number[], point2: number[]): number => {
+  if (!Array.isArray(point1) || !Array.isArray(point2)) {
+    return 0;
+  }
+  
+  return Math.sqrt(
+    point1.reduce((sum, val, i) => sum + Math.pow(val - (point2[i] || 0), 2), 0)
+  );
+};
 
 /**
  * Calculate Davies-Bouldin Index for cluster evaluation
@@ -22,7 +36,7 @@ const calculateDaviesBouldinIndex = (
   const k = centroids.length;
   if (k <= 1) return 0;
 
-  // Calculate within-cluster scatter for each cluster
+  // Calculate within-cluster scatter for each cluster using Euclidean distance
   const withinClusterScatter = centroids.map((centroid, i) => {
     // Validate centroid is an array
     if (!Array.isArray(centroid)) {
@@ -34,16 +48,14 @@ const calculateDaviesBouldinIndex = (
     if (clusterPoints.length === 0) return 0;
     
     const sumDistances = clusterPoints.reduce((sum, point) => {
-      const distance = Math.sqrt(
-        point.reduce((acc, val, idx) => acc + Math.pow(val - centroid[idx], 2), 0)
-      );
+      const distance = calculateEuclideanDistance(point, centroid);
       return sum + distance;
     }, 0);
     
     return sumDistances / clusterPoints.length;
   });
 
-  // Calculate between-cluster distances
+  // Calculate between-cluster distances using Euclidean distance
   const betweenClusterDistances: number[][] = [];
   for (let i = 0; i < k; i++) {
     betweenClusterDistances[i] = [];
@@ -55,9 +67,7 @@ const calculateDaviesBouldinIndex = (
           continue;
         }
 
-        const distance = Math.sqrt(
-          centroids[i].reduce((acc, val, idx) => acc + Math.pow(val - centroids[j][idx], 2), 0)
-        );
+        const distance = calculateEuclideanDistance(centroids[i], centroids[j]);
         betweenClusterDistances[i][j] = distance;
       } else {
         betweenClusterDistances[i][j] = Infinity;
@@ -82,15 +92,24 @@ const calculateDaviesBouldinIndex = (
 };
 
 /**
- * Calculate average within-centroid distance
+ * Calculate average within-centroid distance (overall and per cluster)
  */
 const calculateAvgWithinCentroidDistance = (
   data: number[][],
   clusters: number[],
   centroids: number[][]
-): number => {
+): {
+  overall: number;
+  perCluster: { [key: string]: number };
+} => {
   let totalDistance = 0;
   let totalPoints = 0;
+  const perClusterDistances: { [key: number]: { sum: number; count: number } } = {};
+
+  // Initialize per-cluster tracking
+  centroids.forEach((_, i) => {
+    perClusterDistances[i] = { sum: 0, count: 0 };
+  });
 
   data.forEach((point, idx) => {
     const clusterIdx = clusters[idx];
@@ -103,16 +122,30 @@ const calculateAvgWithinCentroidDistance = (
         return;
       }
 
-      const distance = Math.sqrt(
-        point.reduce((acc, val, i) => acc + Math.pow(val - centroid[i], 2), 0)
-      );
+      const distance = calculateEuclideanDistance(point, centroid);
       
+      // Overall statistics
       totalDistance += distance;
       totalPoints++;
+      
+      // Per-cluster statistics
+      perClusterDistances[clusterIdx].sum += distance;
+      perClusterDistances[clusterIdx].count++;
     }
   });
 
-  return totalPoints > 0 ? totalDistance / totalPoints : 0;
+  // Calculate per-cluster averages
+  const perCluster: { [key: string]: number } = {};
+  Object.keys(perClusterDistances).forEach(clusterIdx => {
+    const cluster = parseInt(clusterIdx);
+    const { sum, count } = perClusterDistances[cluster];
+    perCluster[`cluster_${cluster}`] = count > 0 ? sum / count : 0;
+  });
+
+  return {
+    overall: totalPoints > 0 ? totalDistance / totalPoints : 0,
+    perCluster
+  };
 };
 
 /**
@@ -169,7 +202,7 @@ export const calculateElbowMethod = async (
         initialization: 'random'
       });
       
-      // Calculate WCSS manually if not provided
+      // Calculate WCSS using Euclidean distance
       let wcss = 0;
       features.forEach((point, idx) => {
         const clusterIdx = result.clusters[idx];
@@ -182,10 +215,8 @@ export const calculateElbowMethod = async (
             return;
           }
 
-          const distance = point.reduce((sum, val, i) => {
-            return sum + Math.pow(val - centroid[i], 2);
-          }, 0);
-          wcss += distance;
+          const distance = calculateEuclideanDistance(point, centroid);
+          wcss += distance * distance; // Square the distance for WCSS
         }
       });
       
@@ -202,7 +233,7 @@ export const calculateElbowMethod = async (
 };
 
 /**
- * Perform K-Means clustering on data
+ * Perform K-Means clustering on data using Euclidean distance
  */
 export const performKMeansClustering = async (
   data: DataPoint[],
@@ -233,11 +264,12 @@ export const performKMeansClustering = async (
   }
 
   try {
-    // Run K-Means
+    // Run K-Means with Euclidean distance (default in ml-kmeans)
     const result = kmeans(features, k, {
       seed: 42,
       maxIterations: 100,
-      initialization: 'random'
+      initialization: 'random',
+      distanceFunction: 'euclidean' // Explicitly use Euclidean distance
     });
 
     // Validate result
@@ -258,12 +290,9 @@ export const performKMeansClustering = async (
       }
     });
 
-    // Calculate evaluation metrics
-    const avgWithinCentroidDistance = calculateAvgWithinCentroidDistance(
-      features,
-      result.clusters,
-      result.centroids
-    );
+    // Calculate evaluation metrics using Euclidean distance
+    const { overall: avgWithinCentroidDistance, perCluster: avgWithinCentroidDistancePerCluster } = 
+      calculateAvgWithinCentroidDistance(features, result.clusters, result.centroids);
 
     const daviesBouldinIndex = calculateDaviesBouldinIndex(
       features,
@@ -271,7 +300,7 @@ export const performKMeansClustering = async (
       result.centroids
     );
 
-    // Calculate WCSS
+    // Calculate WCSS using Euclidean distance
     let wcss = 0;
     features.forEach((point, idx) => {
       const clusterIdx = result.clusters[idx];
@@ -284,10 +313,8 @@ export const performKMeansClustering = async (
           return;
         }
 
-        const distance = point.reduce((sum, val, i) => {
-          return sum + Math.pow(val - centroid[i], 2);
-        }, 0);
-        wcss += distance;
+        const distance = calculateEuclideanDistance(point, centroid);
+        wcss += distance * distance; // Square the distance for WCSS
       }
     });
 
@@ -304,6 +331,7 @@ export const performKMeansClustering = async (
       data: clusteredData,
       inertiaValues: [wcss],
       avgWithinCentroidDistance,
+      avgWithinCentroidDistancePerCluster,
       daviesBouldinIndex
     };
   } catch (error) {
