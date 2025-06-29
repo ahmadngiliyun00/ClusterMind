@@ -6,10 +6,11 @@ import { DataPoint } from '../utils/csv';
 interface ClusterResultProps {
   data: DataPoint[];
   headers: string[];
-  onReset: () => void;
+  k: number;
+  onReset?: () => void;
 }
 
-const ClusterResult: React.FC<ClusterResultProps> = ({ data, headers, onReset }) => {
+const ClusterResult: React.FC<ClusterResultProps> = ({ data, headers, k, onReset }) => {
   const [selectedCluster, setSelectedCluster] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
@@ -36,6 +37,11 @@ const ClusterResult: React.FC<ClusterResultProps> = ({ data, headers, onReset })
     return acc;
   }, {});
 
+  const handleDownload = () => {
+    const filename = `clustermind_hasil_k${k}.csv`;
+    downloadCSV(data, filename);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -43,20 +49,22 @@ const ClusterResult: React.FC<ClusterResultProps> = ({ data, headers, onReset })
         
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => downloadCSV(data, 'clustermind_hasil.csv')}
+            onClick={handleDownload}
             className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
           >
             <Download size={16} />
             <span>Export CSV</span>
           </button>
           
-          <button
-            onClick={onReset}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
-          >
-            <RefreshCw size={16} />
-            <span>Reset</span>
-          </button>
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+            >
+              <RefreshCw size={16} />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 

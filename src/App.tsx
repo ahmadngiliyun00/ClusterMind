@@ -4,6 +4,7 @@ import DataPreview from './components/DataPreview';
 import ClusterExperiments from './components/ClusterExperiments';
 import ClusterResult from './components/ClusterResult';
 import Visualization from './components/Visualization';
+import ElbowAnalysis from './components/ElbowAnalysis';
 import { parseFile } from './utils/csv';
 import type { ParsedData, DataPoint } from './utils/csv';
 import { performKMeansClustering, calculateElbowMethod } from './utils/clustering';
@@ -21,6 +22,8 @@ interface ClusterExperiment {
 interface ExperimentResult extends ClusteringResult {
   experimentName: string;
   k: number;
+  avgWithinCentroidDistance: number;
+  daviesBouldinIndex: number;
 }
 
 function App() {
@@ -34,6 +37,7 @@ function App() {
   const [activeStep, setActiveStep] = useState(1);
   const [showAbout, setShowAbout] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   
   // Handle file upload
   const handleFileUpload = async (file: File, separator?: string) => {
@@ -108,12 +112,15 @@ function App() {
         results.push({
           ...result,
           experimentName: experiment.name,
-          k: experiment.k
+          k: experiment.k,
+          avgWithinCentroidDistance: result.avgWithinCentroidDistance || 0,
+          daviesBouldinIndex: result.daviesBouldinIndex || 0
         });
       }
       
       setExperimentResults(results);
       setActiveStep(5);
+      setActiveTab(0); // Reset to first tab
     } catch (error) {
       console.error('Error performing clustering experiments:', error);
       alert('Terjadi kesalahan saat melakukan eksperimen clustering.');
@@ -133,23 +140,13 @@ function App() {
         normalizedData.numericalColumns
       );
       setInertiaValues(inertia);
+      setActiveStep(6);
     } catch (error) {
       console.error('Error calculating elbow method:', error);
       alert('Terjadi kesalahan saat menghitung metode elbow.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Reset everything
-  const handleReset = () => {
-    setRawData(null);
-    setNumericalData(null);
-    setNormalizedData(null);
-    setExperimentResults([]);
-    setInertiaValues(null);
-    setActiveStep(1);
-    setShowAbout(true);
   };
 
   // Navigation functions
@@ -164,6 +161,8 @@ function App() {
       handleNormalization();
     } else if (activeStep === 4 && normalizedData) {
       setActiveStep(5);
+    } else if (activeStep === 5 && experimentResults.length > 0) {
+      setActiveStep(6);
     }
   };
 
@@ -193,6 +192,18 @@ function App() {
         action: handleNormalization
       };
     }
+  };
+
+  // Reset everything
+  const handleReset = () => {
+    setRawData(null);
+    setNumericalData(null);
+    setNormalizedData(null);
+    setExperimentResults([]);
+    setInertiaValues(null);
+    setActiveStep(1);
+    setShowAbout(true);
+    setActiveTab(0);
   };
 
   return (
@@ -374,9 +385,9 @@ function App() {
           <>
             {/* Workflow Steps */}
             <div className="flex justify-center mb-8">
-              <div className="w-full max-w-4xl">
+              <div className="w-full max-w-5xl">
                 <ol className="flex items-center w-full justify-center">
-                  {[1, 2, 3, 4, 5].map((step, index) => (
+                  {[1, 2, 3, 4, 5, 6].map((step, index) => (
                     <React.Fragment key={step}>
                       <li className="flex items-center">
                         <span className={`flex items-center justify-center w-12 h-12 border-4 text-lg font-bold rounded-full ${
@@ -387,7 +398,7 @@ function App() {
                           {step}
                         </span>
                       </li>
-                      {index < 4 && (
+                      {index < 5 && (
                         <li className={`flex items-center w-full ${
                           activeStep > step 
                             ? 'after:content-[""] after:w-full after:h-1 after:border-b after:border-indigo-500 after:border-4 after:inline-block' 
@@ -404,6 +415,7 @@ function App() {
                   <span>Numerical</span>
                   <span>Normalize</span>
                   <span>Clustering</span>
+                  <span>Elbow</span>
                 </div>
               </div>
             </div>
@@ -494,30 +506,92 @@ function App() {
                     onRunElbowMethod={runElbowMethod}
                     isLoading={isLoading}
                     maxK={Math.min(10, Math.floor(normalizedData.data.length / 3))}
+                    showElbowButton={experimentResults.length > 0}
                   />
                 </section>
               )}
 
-              {/* Results */}
+              {/* Results with Tabs */}
               {experimentResults.length > 0 && (
-                <section className="space-y-8">
-                  {experimentResults.map((result, index) => (
-                    <div key={result.experimentName} className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-800">
-                        {result.experimentName} (K = {result.k})
-                      </h3>
-                      <ClusterResult
-                        data={result.data}
-                        headers={normalizedData?.headers || []}
-                        onReset={index === 0 ? handleReset : undefined}
-                      />
-                      <Visualization
-                        data={result.data}
-                        inertiaValues={index === 0 ? inertiaValues || undefined : undefined}
-                        numericalColumns={normalizedData?.numericalColumns || []}
-                      />
+                <section className="space-y-6">
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <h2 className="text-xl font-semibold mb-6 text-gray-800">Hasil Eksperimen Clustering</h2>
+                    
+                    {/* Tabs */}
+                    <div className="border-b border-gray-200 mb-6">
+                      <nav className="-mb-px flex space-x-8 overflow-x-auto">
+                        {experimentResults.map((result, index) => (
+                          <button
+                            key={result.experimentName}
+                            onClick={() => setActiveTab(index)}
+                            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                              activeTab === index
+                                ? 'border-indigo-500 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            {result.experimentName} (K = {result.k})
+                          </button>
+                        ))}
+                      </nav>
                     </div>
-                  ))}
+
+                    {/* Tab Content */}
+                    {experimentResults[activeTab] && (
+                      <div className="space-y-6">
+                        {/* Metrics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-blue-50 p-4 rounded-lg">
+                            <h3 className="text-sm font-medium text-blue-700 mb-1">
+                              Avg. Within Centroid Distance
+                            </h3>
+                            <p className="text-2xl font-bold text-blue-900">
+                              {experimentResults[activeTab].avgWithinCentroidDistance.toFixed(4)}
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              Semakin kecil semakin baik
+                            </p>
+                          </div>
+                          <div className="bg-green-50 p-4 rounded-lg">
+                            <h3 className="text-sm font-medium text-green-700 mb-1">
+                              Davies Bouldin Index
+                            </h3>
+                            <p className="text-2xl font-bold text-green-900">
+                              {experimentResults[activeTab].daviesBouldinIndex.toFixed(4)}
+                            </p>
+                            <p className="text-xs text-green-600 mt-1">
+                              Semakin kecil semakin baik
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Cluster Result */}
+                        <ClusterResult
+                          data={experimentResults[activeTab].data}
+                          headers={normalizedData?.headers || []}
+                          k={experimentResults[activeTab].k}
+                          onReset={activeTab === 0 ? handleReset : undefined}
+                        />
+
+                        {/* Visualization */}
+                        <Visualization
+                          data={experimentResults[activeTab].data}
+                          numericalColumns={normalizedData?.numericalColumns || []}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Step 6: Elbow Analysis */}
+              {activeStep >= 6 && inertiaValues && (
+                <section>
+                  <ElbowAnalysis
+                    inertiaValues={inertiaValues}
+                    onBack={() => setActiveStep(5)}
+                    onReset={handleReset}
+                  />
                 </section>
               )}
             </div>

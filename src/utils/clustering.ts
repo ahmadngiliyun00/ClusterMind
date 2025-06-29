@@ -7,7 +7,93 @@ export interface ClusteringResult {
   clusterSizes: number[];
   data: DataPoint[];
   inertiaValues?: number[];
+  avgWithinCentroidDistance?: number;
+  daviesBouldinIndex?: number;
 }
+
+/**
+ * Calculate Davies-Bouldin Index for cluster evaluation
+ */
+const calculateDaviesBouldinIndex = (
+  data: number[][],
+  clusters: number[],
+  centroids: number[][]
+): number => {
+  const k = centroids.length;
+  if (k <= 1) return 0;
+
+  // Calculate within-cluster scatter for each cluster
+  const withinClusterScatter = centroids.map((centroid, i) => {
+    const clusterPoints = data.filter((_, idx) => clusters[idx] === i);
+    if (clusterPoints.length === 0) return 0;
+    
+    const sumDistances = clusterPoints.reduce((sum, point) => {
+      const distance = Math.sqrt(
+        point.reduce((acc, val, idx) => acc + Math.pow(val - centroid[idx], 2), 0)
+      );
+      return sum + distance;
+    }, 0);
+    
+    return sumDistances / clusterPoints.length;
+  });
+
+  // Calculate between-cluster distances
+  const betweenClusterDistances: number[][] = [];
+  for (let i = 0; i < k; i++) {
+    betweenClusterDistances[i] = [];
+    for (let j = 0; j < k; j++) {
+      if (i !== j) {
+        const distance = Math.sqrt(
+          centroids[i].reduce((acc, val, idx) => acc + Math.pow(val - centroids[j][idx], 2), 0)
+        );
+        betweenClusterDistances[i][j] = distance;
+      } else {
+        betweenClusterDistances[i][j] = Infinity;
+      }
+    }
+  }
+
+  // Calculate Davies-Bouldin Index
+  let dbIndex = 0;
+  for (let i = 0; i < k; i++) {
+    let maxRatio = 0;
+    for (let j = 0; j < k; j++) {
+      if (i !== j && betweenClusterDistances[i][j] > 0) {
+        const ratio = (withinClusterScatter[i] + withinClusterScatter[j]) / betweenClusterDistances[i][j];
+        maxRatio = Math.max(maxRatio, ratio);
+      }
+    }
+    dbIndex += maxRatio;
+  }
+
+  return dbIndex / k;
+};
+
+/**
+ * Calculate average within-centroid distance
+ */
+const calculateAvgWithinCentroidDistance = (
+  data: number[][],
+  clusters: number[],
+  centroids: number[][]
+): number => {
+  let totalDistance = 0;
+  let totalPoints = 0;
+
+  data.forEach((point, idx) => {
+    const clusterIdx = clusters[idx];
+    const centroid = centroids[clusterIdx];
+    
+    const distance = Math.sqrt(
+      point.reduce((acc, val, i) => acc + Math.pow(val - centroid[i], 2), 0)
+    );
+    
+    totalDistance += distance;
+    totalPoints++;
+  });
+
+  return totalPoints > 0 ? totalDistance / totalPoints : 0;
+};
 
 /**
  * Calculate inertia values for different K values to determine optimal number of clusters
@@ -108,6 +194,19 @@ export const performKMeansClustering = async (
     }
   });
 
+  // Calculate evaluation metrics
+  const avgWithinCentroidDistance = calculateAvgWithinCentroidDistance(
+    features,
+    result.clusters,
+    result.centroids
+  );
+
+  const daviesBouldinIndex = calculateDaviesBouldinIndex(
+    features,
+    result.clusters,
+    result.centroids
+  );
+
   // Add cluster assignments to original data
   const clusteredData = data.map((point, i) => ({
     ...point,
@@ -120,5 +219,7 @@ export const performKMeansClustering = async (
     clusterSizes,
     data: clusteredData,
     inertiaValues: [result.withinClusterMSE || 0],
+    avgWithinCentroidDistance,
+    daviesBouldinIndex
   };
 };

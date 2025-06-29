@@ -12,13 +12,15 @@ interface ClusterExperimentsProps {
   onRunElbowMethod: () => void;
   isLoading: boolean;
   maxK: number;
+  showElbowButton?: boolean;
 }
 
 const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   onRunExperiments,
   onRunElbowMethod,
   isLoading,
-  maxK = 10
+  maxK = 10,
+  showElbowButton = false
 }) => {
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('k-means');
   const [experiments, setExperiments] = useState<ClusterExperiment[]>([
@@ -43,7 +45,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   };
 
   const removeExperiment = (id: string) => {
-    if (experiments.length > 1) {
+    if (experiments.length > 5) {
       setExperiments(experiments.filter(exp => exp.id !== id));
     }
   };
@@ -152,14 +154,16 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
             <span>Jalankan Eksperimen</span>
           </button>
           
-          <button
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-            onClick={onRunElbowMethod}
-            disabled={isLoading}
-          >
-            <BarChart3 size={20} />
-            <span>Analisis Elbow</span>
-          </button>
+          {showElbowButton && (
+            <button
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              onClick={onRunElbowMethod}
+              disabled={isLoading}
+            >
+              <BarChart3 size={20} />
+              <span>Analisis Elbow</span>
+            </button>
+          )}
         </div>
       </div>
 
