@@ -169,6 +169,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                 />
                 <Legend />
                 <Line 
+                  key="wcss-line"
                   type="monotone" 
                   dataKey="WCSS" 
                   stroke="#0D9488" 
@@ -176,29 +177,6 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                   dot={{ fill: '#0D9488', r: 6 }}
                   activeDot={{ r: 8, fill: '#0F766E' }}
                 />
-                {/* Highlight suggested K */}
-                {suggestedWCSSK && (
-                  <Line
-                    type="monotone"
-                    dataKey="wcss"
-                    stroke="transparent"
-                    dot={(props: any) => {
-                      if (props.payload.k === suggestedWCSSK) {
-                        return (
-                          <circle
-                            cx={props.cx}
-                            cy={props.cy}
-                            r={10}
-                            fill="#EF4444"
-                            stroke="#DC2626"
-                            strokeWidth={2}
-                          />
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -235,6 +213,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                 />
                 <Legend />
                 <Line 
+                  key="dbi-line"
                   type="monotone" 
                   dataKey="Davies-Bouldin Index" 
                   stroke="#7C3AED" 
@@ -242,29 +221,6 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                   dot={{ fill: '#7C3AED', r: 6 }}
                   activeDot={{ r: 8, fill: '#6D28D9' }}
                 />
-                {/* Highlight suggested K */}
-                {suggestedDBIK && (
-                  <Line
-                    type="monotone"
-                    dataKey="dbi"
-                    stroke="transparent"
-                    dot={(props: any) => {
-                      if (props.payload.k === suggestedDBIK) {
-                        return (
-                          <circle
-                            cx={props.cx}
-                            cy={props.cy}
-                            r={10}
-                            fill="#EF4444"
-                            stroke="#DC2626"
-                            strokeWidth={2}
-                          />
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -298,7 +254,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                 const isDBIRecommended = row.k === suggestedDBIK;
                 
                 return (
-                  <tr key={row.k} className={
+                  <tr key={`table-row-${row.k}`} className={
                     isWCSSRecommended || isDBIRecommended ? 'bg-yellow-50' : 'hover:bg-gray-50'
                   }>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -313,12 +269,12 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex gap-2">
                         {isWCSSRecommended && (
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-800">
+                          <span key={`wcss-badge-${row.k}`} className="px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-800">
                             WCSS Optimal
                           </span>
                         )}
                         {isDBIRecommended && (
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+                          <span key={`dbi-badge-${row.k}`} className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
                             DBI Optimal
                           </span>
                         )}
