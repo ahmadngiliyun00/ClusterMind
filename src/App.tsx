@@ -809,7 +809,7 @@ function App() {
 
                     {/* Elbow Analysis Button - Moved here from ClusterExperiments */}
                     <div className="mt-8 pt-6 border-t border-gray-200">
-                      <div className="flex items-center justify-flex-end">
+                      <div className="flex items-center justify-end">
                         <button
                           className="flex items-center justify-center gap-2 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                           onClick={runElbowMethod}
