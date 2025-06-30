@@ -93,7 +93,10 @@ function App() {
       }
       
       setProcessedData(result);
-      setActiveStep(3);
+      
+      // Auto-proceed to normalization
+      await performNormalizationStep(result);
+      
     } catch (error) {
       console.error('Error in One-Hot Encoding:', error);
       alert('Terjadi kesalahan saat melakukan One-Hot Encoding: ' + (error as Error).message);
@@ -103,24 +106,17 @@ function App() {
     }
   };
 
-  // Handle normalization
-  const handleNormalization = async () => {
-    const dataToNormalize = processedData || rawData;
-    if (!dataToNormalize) return;
-    
+  // Handle normalization as a separate function
+  const performNormalizationStep = async (dataToNormalize: ParsedData) => {
     try {
-      setIsLoading(true);
       setLoadingProgress('Melakukan normalisasi data...');
       
       const normalizedResult = await performNormalization(dataToNormalize);
       setNormalizedData(normalizedResult);
-      setActiveStep(4);
+      setActiveStep(3); // Skip to step 3 (clustering configuration)
     } catch (error) {
       console.error('Error normalizing data:', error);
       alert('Terjadi kesalahan saat melakukan normalisasi data: ' + (error as Error).message);
-    } finally {
-      setIsLoading(false);
-      setLoadingProgress('');
     }
   };
 
@@ -256,7 +252,7 @@ function App() {
       }
       
       setExperimentResults(results);
-      setActiveStep(5); // Stay at step 5 for clustering results
+      setActiveStep(4); // Move to step 4 for clustering results
       setActiveTab(0); // Reset to first tab
       
     } catch (error) {
@@ -339,7 +335,7 @@ function App() {
         dbi: elbowResult.dbi,
         kValues: kValues
       });
-      setActiveStep(6); // Move to step 6 for elbow analysis
+      setActiveStep(5); // Move to step 5 for elbow analysis
       
     } catch (error) {
       console.error('❌ ELBOW ANALYSIS FAILED:', error);
@@ -395,13 +391,10 @@ function App() {
   };
 
   const goToNextStep = () => {
-    if (activeStep === 3 && processedData) {
-      handleNormalization();
-    } else if (activeStep === 4 && normalizedData) {
-      setActiveStep(5);
-    } else if (activeStep === 5 && experimentResults.length > 0) {
-      // Don't auto-advance to step 6, user needs to click Elbow Analysis
-      return;
+    if (activeStep === 2 && rawData) {
+      handleOneHotEncoding();
+    } else if (activeStep === 3 && normalizedData) {
+      setActiveStep(4);
     }
   };
 
@@ -413,22 +406,24 @@ function App() {
       // All categorical - need conversion
       return {
         nextStep: 3,
-        buttonText: "One-Hot Encoding",
+        buttonText: "Proses Data & Mulai Clustering",
         action: handleOneHotEncoding
       };
     } else if (rawData.categoricalColumns.length > 0) {
       // Mixed data - need conversion
       return {
         nextStep: 3,
-        buttonText: "One-Hot Encoding",
+        buttonText: "Proses Data & Mulai Clustering",
         action: handleOneHotEncoding
       };
     } else {
-      // All numerical - skip to normalization
+      // All numerical - skip to clustering
       return {
-        nextStep: 4,
-        buttonText: "Lakukan Normalisasi (Min-Max)",
-        action: handleNormalization
+        nextStep: 3,
+        buttonText: "Mulai Clustering",
+        action: async () => {
+          await performNormalizationStep(rawData);
+        }
       };
     }
   };
@@ -629,11 +624,11 @@ function App() {
           </section>
         ) : (
           <>
-            {/* Workflow Steps */}
+            {/* Workflow Steps - Updated to 5 steps */}
             <div className="flex justify-center mb-8">
               <div className="w-full max-w-5xl">
                 <ol className="flex items-center w-full justify-center">
-                  {[1, 2, 3, 4, 5, 6].map((step, index) => (
+                  {[1, 2, 3, 4, 5].map((step, index) => (
                     <React.Fragment key={step}>
                       <li className="flex items-center">
                         <span className={`flex items-center justify-center w-12 h-12 border-4 text-lg font-bold rounded-full ${
@@ -644,7 +639,7 @@ function App() {
                           {step}
                         </span>
                       </li>
-                      {index < 5 && (
+                      {index < 4 && (
                         <li className={`flex items-center w-full ${
                           activeStep > step 
                             ? 'after:content-[""] after:w-full after:h-1 after:border-b after:border-indigo-500 after:border-4 after:inline-block' 
@@ -658,9 +653,8 @@ function App() {
                 <div className="flex justify-between mt-2 text-xs text-gray-600">
                   <span>Upload</span>
                   <span>Preview</span>
-                  <span>One-Hot</span>
-                  <span>Min-Max</span>
                   <span>Clustering</span>
+                  <span>Hasil</span>
                   <span>Elbow</span>
                 </div>
               </div>
@@ -708,44 +702,8 @@ function App() {
                 </section>
               )}
 
-              {/* Step 3: Processed Data (One-Hot Encoded) */}
-              {activeStep >= 3 && processedData && (
-                <section>
-                  <DataPreview
-                    data={processedData.data}
-                    headers={processedData.headers}
-                    title="Data telah diproses dengan Smart One-Hot Encoding"
-                    description="Kolom kategorikal telah dikonversi menjadi binary features. Kolom dengan cardinality tinggi telah difilter untuk clustering yang lebih efektif."
-                    numericalColumns={processedData.numericalColumns}
-                    categoricalColumns={processedData.categoricalColumns}
-                    onNext={activeStep === 3 ? goToNextStep : undefined}
-                    nextButtonText="Lakukan Normalisasi Min-Max"
-                    showNextButton={activeStep === 3}
-                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
-                  />
-                </section>
-              )}
-
-              {/* Step 4: Normalized Data */}
-              {activeStep >= 4 && normalizedData && (
-                <section>
-                  <DataPreview
-                    data={normalizedData.data}
-                    headers={normalizedData.headers}
-                    title="Data siap untuk clustering"
-                    description="Data telah dinormalisasi dan siap untuk proses clustering K-Means. Semua fitur berada dalam skala yang sesuai untuk analisis jarak Euclidean."
-                    numericalColumns={normalizedData.numericalColumns}
-                    categoricalColumns={normalizedData.categoricalColumns}
-                    onNext={activeStep === 4 ? goToNextStep : undefined}
-                    nextButtonText="Lanjut ke Clustering"
-                    showNextButton={activeStep === 4}
-                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
-                  />
-                </section>
-              )}
-
-              {/* Step 5: Clustering Configuration */}
-              {activeStep >= 5 && normalizedData && (
+              {/* Step 3: Clustering Configuration */}
+              {activeStep >= 3 && normalizedData && (
                 <section>
                   <ClusterExperiments
                     onRunExperiments={runClusteringExperiments}
@@ -760,8 +718,8 @@ function App() {
                 </section>
               )}
 
-              {/* Step 5: Clustering Results - ONLY SHOW WHEN NOT LOADING AND HAVE RESULTS */}
-              {activeStep >= 5 && experimentResults.length > 0 && !isLoading && (
+              {/* Step 4: Clustering Results - ONLY SHOW WHEN NOT LOADING AND HAVE RESULTS */}
+              {activeStep >= 4 && experimentResults.length > 0 && !isLoading && (
                 <section className="space-y-6">
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center justify-between mb-6">
@@ -849,14 +807,14 @@ function App() {
                 </section>
               )}
 
-              {/* Step 6: Elbow Analysis - ONLY SHOW WHEN HAVE ELBOW DATA AND NOT LOADING */}
-              {activeStep >= 6 && elbowData && !isLoading && (
+              {/* Step 5: Elbow Analysis - ONLY SHOW WHEN HAVE ELBOW DATA AND NOT LOADING */}
+              {activeStep >= 5 && elbowData && !isLoading && (
                 <section>
                   <ElbowAnalysis
                     wcssValues={elbowData.wcss}
                     dbiValues={elbowData.dbi}
                     kValues={elbowData.kValues}
-                    onBack={() => setActiveStep(5)}
+                    onBack={() => setActiveStep(4)}
                     onReset={handleReset}
                   />
                 </section>
@@ -891,7 +849,7 @@ function App() {
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                            <span>Filter kolom dengan cardinality tinggi (&gt;10 nilai unik)</span>
+                            <span>Filter kolom dengan cardinality tinggi (>50 nilai unik)</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
@@ -912,7 +870,7 @@ function App() {
                               Smart Filtering untuk Clustering Optimal
                             </p>
                             <p className="text-xs text-yellow-700 mt-1">
-                              Sistem akan otomatis mengecualikan kolom seperti nama sekolah, kelurahan, dll. yang memiliki terlalu banyak nilai unik
+                              Sistem akan otomatis mengecualikan kolom dengan cardinality sangat tinggi (>50 nilai unik)
                             </p>
                           </div>
                         </div>
@@ -923,7 +881,7 @@ function App() {
               )}
 
               {/* Loading State for Elbow Analysis */}
-              {activeStep >= 6 && isLoading && loadingProgress.includes('Elbow') && (
+              {activeStep >= 5 && isLoading && loadingProgress.includes('Elbow') && (
                 <section>
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center gap-3 mb-4">
