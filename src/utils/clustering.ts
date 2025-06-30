@@ -347,7 +347,7 @@ const validateClusteringResult = (result: any, k: number, dataLength: number, fe
 /**
  * Enhanced K-Means with better initialization and multiple attempts
  */
-const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 15) => {
+const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 30) => {
   let bestResult = null;
   let bestWCSS = Infinity;
   
@@ -366,7 +366,7 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       // Use different initialization strategies
-      const initStrategies = ['random', 'kmeans++'];
+      const initStrategies = ['random', 'kmeans++', 'forgy'];
       const initStrategy = initStrategies[attempt % initStrategies.length];
       
       const seed = 42 + attempt * 17;
@@ -436,7 +436,7 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
   }
   
   if (!bestResult) {
-    console.error('All K-Means attempts failed - using fallback clustering');
+    console.warn('All K-Means attempts failed - using fallback clustering');
     // Create a simple fallback clustering
     const fallbackClusters = features.map((_, i) => i % k);
     const fallbackCentroids = Array(k).fill(null).map((_, clusterIdx) => {
@@ -502,7 +502,7 @@ export const calculateElbowMethodFromExperiments = async (
       console.log(`\n--- K = ${k} ---`);
       
       // Run K-Means clustering with retry mechanism
-      let result = runKMeansWithRetry(features, k, 15);
+      let result = runKMeansWithRetry(features, k);
       
       // Validate and fix result if needed
       result = validateClusteringResult(result, k, features.length, features);
@@ -589,7 +589,7 @@ export const performKMeansClustering = async (
 
   try {
     // Run K-Means with enhanced retry mechanism
-    let result = runKMeansWithRetry(features, k, 15);
+    let result = runKMeansWithRetry(features, k);
 
     // Validate and fix result if needed
     result = validateClusteringResult(result, k, features.length, features);
