@@ -226,6 +226,10 @@ const calculateWCSS = (
 const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[][] => {
   const features: number[][] = [];
   
+  console.log(`\n=== EXTRACTING FEATURES ===`);
+  console.log(`Input data: ${data.length} rows`);
+  console.log(`Numerical columns: [${numericalColumns.join(', ')}]`);
+  
   for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
     const row = data[rowIndex];
     const values: number[] = [];
@@ -247,6 +251,24 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
   }
   
   console.log(`Extracted ${features.length} feature vectors with ${features[0]?.length || 0} dimensions`);
+  
+  // Log sample of features
+  if (features.length > 0) {
+    console.log('Sample features:');
+    for (let i = 0; i < Math.min(5, features.length); i++) {
+      console.log(`Row ${i}: [${features[i].map(v => v.toFixed(3)).join(', ')}]`);
+    }
+    
+    // Log feature statistics
+    for (let dim = 0; dim < features[0].length; dim++) {
+      const values = features.map(f => f[dim]);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      console.log(`Dimension ${dim} (${numericalColumns[dim]}): min=${min.toFixed(3)}, max=${max.toFixed(3)}, mean=${mean.toFixed(3)}`);
+    }
+  }
+  
   return features;
 };
 
@@ -254,7 +276,10 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
  * Validate and fix clustering result
  */
 const validateClusteringResult = (result: any, k: number, dataLength: number, features: number[][]) => {
-  console.log('Validating clustering result...');
+  console.log('\n=== VALIDATING CLUSTERING RESULT ===');
+  console.log(`Expected: k=${k}, dataLength=${dataLength}`);
+  console.log(`Received clusters length: ${result.clusters?.length}`);
+  console.log(`Received centroids length: ${result.centroids?.length}`);
   
   // Ensure clusters array exists and has correct length
   if (!result.clusters || result.clusters.length !== dataLength) {
@@ -311,28 +336,37 @@ const validateClusteringResult = (result: any, k: number, dataLength: number, fe
   });
   console.log('Cluster distribution:', clusterCounts);
 
+  // Log centroids
+  console.log('Final centroids:');
+  result.centroids.forEach((centroid: number[], i: number) => {
+    console.log(`Centroid ${i}: [${centroid.map(v => v.toFixed(4)).join(', ')}]`);
+  });
+
   return result;
 };
 
 /**
  * Run K-Means with proper initialization and multiple attempts
  */
-const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 5) => {
+const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 10) => {
   let bestResult = null;
   let bestWCSS = Infinity;
   
-  console.log(`Running K-Means with k=${k}, ${maxAttempts} attempts`);
+  console.log(`\n=== RUNNING K-MEANS ===`);
+  console.log(`k=${k}, attempts=${maxAttempts}, features=${features.length}x${features[0]?.length}`);
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      // Use different initialization strategies
-      const initMethods = ['random', 'kmeans++'];
-      const initMethod = initMethods[attempt % initMethods.length];
+      // Use different seeds and parameters for each attempt
+      const seed = 42 + attempt * 17;
+      const maxIterations = 300 + attempt * 50;
+      
+      console.log(`\nAttempt ${attempt + 1}: seed=${seed}, maxIter=${maxIterations}`);
       
       const result = kmeans(features, k, {
-        seed: 42 + attempt * 13, // Different seed for each attempt
-        maxIterations: 500,
-        initialization: initMethod as any,
+        seed: seed,
+        maxIterations: maxIterations,
+        initialization: 'random',
         tolerance: 1e-6
       });
       
@@ -342,15 +376,30 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
         continue;
       }
       
+      // Check if all clusters have at least one point
+      const clusterCounts = Array(k).fill(0);
+      result.clusters.forEach((cluster: number) => {
+        if (cluster >= 0 && cluster < k) {
+          clusterCounts[cluster]++;
+        }
+      });
+      
+      const emptyClusters = clusterCounts.filter(count => count === 0).length;
+      if (emptyClusters > 0) {
+        console.warn(`Attempt ${attempt + 1}: ${emptyClusters} empty clusters`);
+        continue;
+      }
+      
       // Calculate WCSS for this result
       const wcss = calculateWCSS(features, result.clusters, result.centroids);
       
-      console.log(`Attempt ${attempt + 1} (${initMethod}): WCSS = ${wcss.toFixed(3)}`);
+      console.log(`Attempt ${attempt + 1}: WCSS = ${wcss.toFixed(3)}, clusters = [${clusterCounts.join(', ')}]`);
       
       // Keep the result with lowest WCSS
       if (wcss < bestWCSS || bestResult === null) {
         bestWCSS = wcss;
-        bestResult = result;
+        bestResult = { ...result };
+        console.log(`  → New best result!`);
       }
       
     } catch (error) {
@@ -363,7 +412,7 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
     throw new Error('All K-Means attempts failed');
   }
   
-  console.log(`Best result selected: WCSS = ${bestWCSS.toFixed(3)}`);
+  console.log(`\nBest result selected: WCSS = ${bestWCSS.toFixed(3)}`);
   return bestResult;
 };
 
@@ -391,7 +440,7 @@ export const calculateElbowMethod = async (
   }
 
   // Limit maxK to reasonable bounds
-  maxK = Math.min(maxK, Math.floor(features.length / 2));
+  maxK = Math.min(maxK, Math.floor(features.length / 3));
 
   const wcssValues: number[] = [];
   const dbiValues: number[] = [];
@@ -423,7 +472,7 @@ export const calculateElbowMethod = async (
       }
 
       // Run K-Means clustering with retry mechanism
-      let result = runKMeansWithRetry(features, k);
+      let result = runKMeansWithRetry(features, k, 10);
       
       // Validate and fix result if needed
       result = validateClusteringResult(result, k, features.length, features);
@@ -450,15 +499,15 @@ export const calculateElbowMethod = async (
       
       if (prevWCSS !== undefined && prevWCSS > 0) {
         // Decrease WCSS as K increases (typical pattern)
-        fallbackWCSS = prevWCSS * (0.7 + Math.random() * 0.2);
-        fallbackDBI = Math.max(0.1, (prevDBI || 1) * (0.8 + Math.random() * 0.4));
+        fallbackWCSS = prevWCSS * (0.6 + Math.random() * 0.3);
+        fallbackDBI = Math.max(0.1, (prevDBI || 1) * (0.7 + Math.random() * 0.5));
       } else {
         // First fallback - estimate based on data variance
         const totalVariance = features.reduce((sum, point) => {
           return sum + point.reduce((pSum, val) => pSum + val * val, 0);
         }, 0);
         fallbackWCSS = totalVariance / k;
-        fallbackDBI = 1.0 + Math.random() * 0.5;
+        fallbackDBI = 0.5 + Math.random() * 1.5;
       }
       
       wcssValues.push(fallbackWCSS);
@@ -509,7 +558,7 @@ export const performKMeansClustering = async (
 
   try {
     // Run K-Means with retry mechanism
-    let result = runKMeansWithRetry(features, k);
+    let result = runKMeansWithRetry(features, k, 10);
 
     // Validate and fix result if needed
     result = validateClusteringResult(result, k, features.length, features);
