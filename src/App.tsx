@@ -107,6 +107,7 @@ function App() {
     try {
       setIsLoading(true);
       setExperimentResults([]); // Clear previous results immediately
+      setElbowData(null); // Clear elbow data when running new experiments
       setCurrentExperiment(0);
       setTotalExperiments(experiments.length);
       setLoadingProgress('Memulai eksperimen clustering...');
@@ -227,7 +228,7 @@ function App() {
       }
       
       setExperimentResults(results);
-      setActiveStep(5);
+      setActiveStep(5); // Stay at step 5 for clustering results
       setActiveTab(0); // Reset to first tab
       
     } catch (error) {
@@ -298,7 +299,7 @@ function App() {
       console.log('💡 Tip: Look for the "elbow" in WCSS graph and minimum DBI value');
       
       setElbowData(elbowResult);
-      setActiveStep(6);
+      setActiveStep(6); // Move to step 6 for elbow analysis
       
     } catch (error) {
       console.error('❌ ELBOW ANALYSIS FAILED:', error);
@@ -359,7 +360,8 @@ function App() {
     } else if (activeStep === 4 && normalizedData) {
       setActiveStep(5);
     } else if (activeStep === 5 && experimentResults.length > 0) {
-      setActiveStep(6);
+      // Don't auto-advance to step 6, user needs to click Elbow Analysis
+      return;
     }
   };
 
@@ -712,16 +714,18 @@ function App() {
                     currentExperiment={currentExperiment}
                     totalExperiments={totalExperiments}
                     maxK={Math.min(10, Math.floor(normalizedData.data.length / 3))}
-                    showElbowButton={experimentResults.length > 0}
+                    showElbowButton={false} // Remove elbow button from here
                   />
                 </section>
               )}
 
-              {/* Results with Tabs - ONLY SHOW WHEN NOT LOADING */}
-              {experimentResults.length > 0 && !isLoading && (
+              {/* Step 5: Clustering Results - ONLY SHOW WHEN NOT LOADING AND HAVE RESULTS */}
+              {activeStep >= 5 && experimentResults.length > 0 && !isLoading && (
                 <section className="space-y-6">
                   <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold mb-6 text-gray-800">Hasil Eksperimen Clustering</h2>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-xl font-semibold text-gray-800">Hasil Eksperimen Clustering</h2>
+                    </div>
                     
                     {/* Tabs */}
                     <div className="border-b border-gray-200 mb-6">
@@ -786,12 +790,32 @@ function App() {
                         />
                       </div>
                     )}
+
+                    {/* Elbow Analysis Button - Moved here from ClusterExperiments */}
+                    <div className="mt-8 pt-6 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-800">Analisis Lanjutan</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Gunakan Elbow Method untuk menentukan jumlah cluster optimal berdasarkan WCSS dan Davies-Bouldin Index
+                          </p>
+                        </div>
+                        <button
+                          className="flex items-center justify-center gap-2 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                          onClick={runElbowMethod}
+                          disabled={isLoading}
+                        >
+                          <BarChart3 size={20} />
+                          <span>Analisis Elbow</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </section>
               )}
 
-              {/* Step 6: Elbow Analysis */}
-              {activeStep >= 6 && elbowData && (
+              {/* Step 6: Elbow Analysis - ONLY SHOW WHEN HAVE ELBOW DATA AND NOT LOADING */}
+              {activeStep >= 6 && elbowData && !isLoading && (
                 <section>
                   <ElbowAnalysis
                     wcssValues={elbowData.wcss}
@@ -799,6 +823,66 @@ function App() {
                     onBack={() => setActiveStep(5)}
                     onReset={handleReset}
                   />
+                </section>
+              )}
+
+              {/* Loading State for Elbow Analysis */}
+              {activeStep >= 6 && isLoading && loadingProgress.includes('Elbow') && (
+                <section>
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Memproses Analisis Elbow Method</h3>
+                        {loadingProgress && (
+                          <p className="text-sm text-gray-600">{loadingProgress}</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <BarChart3 size={16} />
+                        <span>Menjalankan clustering untuk berbagai nilai K (1 hingga {Math.min(10, Math.floor(normalizedData?.data.length || 0 / 3))})...</span>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded border border-teal-100">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Tahapan Analisis Elbow:</p>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                            <span>Menghitung WCSS untuk setiap nilai K</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                            <span>Menghitung Davies-Bouldin Index untuk setiap nilai K</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                            <span>Menganalisis pola penurunan WCSS untuk menentukan elbow point</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                            <span>Mencari nilai K optimal berdasarkan metrik evaluasi</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                        <div className="flex items-start gap-2">
+                          <div className="text-yellow-600 mt-0.5">💡</div>
+                          <div>
+                            <p className="text-sm text-yellow-800 font-medium">
+                              Tip: Buka Developer Console (F12) untuk melihat detail perhitungan
+                            </p>
+                            <p className="text-xs text-yellow-700 mt-1">
+                              Console akan menampilkan log detail untuk setiap nilai K termasuk perhitungan WCSS dan DBI
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </section>
               )}
             </div>
