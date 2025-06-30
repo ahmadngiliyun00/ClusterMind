@@ -9,7 +9,7 @@ import { parseFile } from './utils/csv';
 import type { ParsedData, DataPoint } from './utils/csv';
 import { performKMeansClustering, calculateElbowMethodFromExperiments } from './utils/clustering';
 import type { ClusteringResult } from './utils/clustering';
-import { performNominalToNumerical, performNormalization } from './utils/preprocessing';
+import { performOneHotEncoding, performNormalization } from './utils/preprocessing';
 
 import { Brain, BarChart3, Users, ArrowRight, Share2, Menu, X, Database, Zap } from 'lucide-react';
 
@@ -65,24 +65,34 @@ function App() {
     }
   };
 
-  // Handle nominal to numerical conversion
-  const handleNominalToNumerical = async () => {
+  // Handle One-Hot Encoding (NEW)
+  const handleOneHotEncoding = async () => {
     if (!rawData) return;
     
     try {
       setIsLoading(true);
-      const processedData = await performNominalToNumerical(rawData);
+      console.log('\n🔄 STARTING ONE-HOT ENCODING PROCESS');
+      console.log('='.repeat(50));
+      
+      const processedData = await performOneHotEncoding(rawData);
       setNumericalData(processedData);
-      setActiveStep(3);
+      
+      // Skip normalization step for One-Hot Encoded data
+      setNormalizedData(processedData);
+      setActiveStep(4); // Skip to step 4 (clustering configuration)
+      
+      console.log('✅ ONE-HOT ENCODING COMPLETED');
+      console.log(`Final data: ${processedData.data.length} rows × ${processedData.numericalColumns.length} binary features`);
+      
     } catch (error) {
-      console.error('Error converting nominal to numerical:', error);
-      alert('Terjadi kesalahan saat mengkonversi data nominal ke numerik: ' + (error as Error).message);
+      console.error('Error in One-Hot Encoding:', error);
+      alert('Terjadi kesalahan saat melakukan One-Hot Encoding: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle normalization
+  // Handle normalization (UPDATED - mostly skipped for One-Hot data)
   const handleNormalization = async () => {
     const dataToNormalize = numericalData || rawData;
     if (!dataToNormalize) return;
@@ -121,9 +131,11 @@ function App() {
       console.log('\n🔬 CLUSTERING EXPERIMENTS STARTED');
       console.log('='.repeat(80));
       console.log(`📊 Dataset: ${normalizedData.data.length} rows × ${normalizedData.numericalColumns.length} features`);
-      console.log(`🔢 Features: [${normalizedData.numericalColumns.join(', ')}]`);
+      console.log(`🔢 Features: [${normalizedData.numericalColumns.slice(0, 10).join(', ')}${normalizedData.numericalColumns.length > 10 ? '...' : ''}]`);
       console.log(`🧪 Total experiments: ${experiments.length}`);
       console.log(`📋 Experiments: ${experiments.map(exp => `${exp.name}(K=${exp.k})`).join(', ')}`);
+      console.log(`🔄 Encoding: One-Hot Encoding (Binary features)`);
+      console.log(`📏 Normalization: Skipped (Binary data already normalized)`);
       console.log('='.repeat(80));
       
       const results: ExperimentResult[] = [];
@@ -144,7 +156,7 @@ function App() {
           
           const startTime = performance.now();
           
-          console.log(`🔄 Running K-Means clustering...`);
+          console.log(`🔄 Running K-Means clustering on One-Hot Encoded data...`);
           const result = await performKMeansClustering(
             normalizedData.data,
             normalizedData.numericalColumns,
@@ -226,6 +238,7 @@ function App() {
       console.log('='.repeat(80));
       console.log('💡 Tip: Lower WCSS and DBI values indicate better clustering quality');
       console.log('📈 Use "Analisis Elbow" to find optimal K value');
+      console.log('🔄 Data processed with One-Hot Encoding (no normalization needed)');
       
       if (results.length === 0) {
         throw new Error('Tidak ada eksperimen yang berhasil dijalankan');
@@ -265,7 +278,7 @@ function App() {
       console.log('\n📈 ELBOW METHOD ANALYSIS STARTED');
       console.log('='.repeat(80));
       console.log(`📊 Dataset: ${normalizedData.data.length} rows × ${normalizedData.numericalColumns.length} features`);
-      console.log(`🔢 Features: [${normalizedData.numericalColumns.join(', ')}]`);
+      console.log(`🔢 Features: One-Hot Encoded binary features`);
       console.log(`📋 Testing K values from experiments: [${kValues.join(', ')}]`);
       console.log(`🧪 Total K values to test: ${kValues.length}`);
       console.log('='.repeat(80));
@@ -309,6 +322,7 @@ function App() {
       }
       console.log('='.repeat(80));
       console.log('💡 Tip: Look for the "elbow" in WCSS graph and minimum DBI value');
+      console.log('🔄 Analysis based on One-Hot Encoded data');
       
       setElbowData({
         wcss: elbowResult.wcss,
@@ -381,32 +395,27 @@ function App() {
     }
   };
 
-  // Determine next step logic
+  // Determine next step logic (UPDATED for One-Hot Encoding)
   const getNextStepInfo = () => {
     if (!rawData) return null;
     
-    if (rawData.numericalColumns.length === 0) {
-      // All categorical - need conversion
+    // For categorical data, always use One-Hot Encoding
+    if (rawData.categoricalColumns.length > 0) {
       return {
         nextStep: 3,
-        buttonText: "Konversi ke Numerik",
-        action: handleNominalToNumerical
+        buttonText: "One-Hot Encoding",
+        action: handleOneHotEncoding
       };
-    } else if (rawData.categoricalColumns.length > 0) {
-      // Mixed data - need conversion
-      return {
-        nextStep: 3,
-        buttonText: "Konversi ke Numerik",
-        action: handleNominalToNumerical
-      };
-    } else {
-      // All numerical - skip to normalization
+    } else if (rawData.numericalColumns.length > 0) {
+      // All numerical - go to normalization
       return {
         nextStep: 4,
         buttonText: "Lakukan Normalisasi (Min-Max)",
         action: handleNormalization
       };
     }
+    
+    return null;
   };
 
   // Reset everything
@@ -507,7 +516,7 @@ function App() {
               <h2 className="text-2xl font-bold mb-4 text-indigo-700">Tentang ClusterMind</h2>
               <p className="text-gray-700 mb-6">
                 ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda melakukan 
-                clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan Min-Max normalization 
+                clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan One-Hot Encoding 
                 dan Euclidean distance. Analisis data Anda langsung di browser, tanpa perlu menginstal software tambahan.
               </p>
               
@@ -516,9 +525,9 @@ function App() {
                   <div className="bg-indigo-100 p-3 rounded-full inline-block mb-4">
                     <Brain className="h-6 w-6 text-indigo-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">K-Means + Min-Max</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">K-Means + One-Hot</h3>
                   <p className="text-gray-700 text-sm">
-                    Clustering dengan normalisasi Min-Max dan Euclidean distance untuk hasil yang optimal.
+                    Clustering dengan One-Hot Encoding dan Euclidean distance untuk data kategorikal yang optimal.
                   </p>
                 </div>
                 
@@ -548,7 +557,7 @@ function App() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2 text-indigo-700">Multi Format</h3>
                   <p className="text-gray-700 text-sm">
-                    Mendukung file CSV, XLS, dan XLSX dengan pemilihan separator otomatis.
+                    Mendukung file CSV, XLS, dan XLSX dengan One-Hot Encoding otomatis.
                   </p>
                 </div>
               </div>
@@ -587,7 +596,7 @@ function App() {
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">TypeScript</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Tailwind CSS</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">ml-kmeans</span>
-                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Min-Max Normalization</span>
+                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">One-Hot Encoding</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Euclidean Distance</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">PapaParse</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">XLSX</span>
@@ -635,8 +644,8 @@ function App() {
                 <div className="flex justify-between mt-2 text-xs text-gray-600">
                   <span>Upload</span>
                   <span>Preview</span>
-                  <span>Numerical</span>
-                  <span>Min-Max</span>
+                  <span>One-Hot</span>
+                  <span>Ready</span>
                   <span>Clustering</span>
                   <span>Elbow</span>
                 </div>
@@ -654,7 +663,7 @@ function App() {
                     </h2>
                     <p className="text-gray-600 mb-6">
                       Upload file CSV, XLS, atau XLSX Anda untuk mulai menganalisis dan mengelompokkan data. 
-                      Pastikan file memiliki header dan berisi data numerik untuk kolom yang akan digunakan dalam clustering.
+                      Aplikasi ini optimal untuk data kategorikal yang akan diproses dengan One-Hot Encoding.
                     </p>
                     <FileUpload onFileUpload={handleFileUpload} />
                     {isLoading && (
@@ -674,7 +683,7 @@ function App() {
                     data={rawData.data}
                     headers={rawData.headers}
                     title="Data berhasil diupload"
-                    description="Berikut adalah preview data yang telah diupload. Periksa struktur data sebelum melanjutkan ke tahap berikutnya."
+                    description="Berikut adalah preview data yang telah diupload. Data kategorikal akan diproses dengan One-Hot Encoding untuk clustering yang optimal."
                     numericalColumns={rawData.numericalColumns}
                     categoricalColumns={rawData.categoricalColumns}
                     onNext={getNextStepInfo()?.action}
@@ -685,39 +694,71 @@ function App() {
                 </section>
               )}
 
-              {/* Step 3: Numerical Data (only show if conversion happened) */}
+              {/* Step 3: One-Hot Encoded Data (only show if conversion happened) */}
               {activeStep >= 3 && numericalData && (
                 <section>
                   <DataPreview
-                    data={numericalData.data}
-                    headers={numericalData.headers}
-                    title="Data telah dikonversi ke numerik"
-                    description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi dengan Min-Max scaling."
+                    data={numericalData.data.slice(0, 10)} // Show only first 10 rows for One-Hot
+                    headers={numericalData.headers.slice(0, 20)} // Show only first 20 columns
+                    title="Data telah dikonversi dengan One-Hot Encoding"
+                    description={`Semua kolom kategorikal telah dikonversi menjadi ${numericalData.numericalColumns.length} kolom biner (0/1). Data siap untuk clustering tanpa normalisasi tambahan karena semua nilai sudah dalam skala yang sama.`}
                     numericalColumns={numericalData.numericalColumns}
                     categoricalColumns={numericalData.categoricalColumns}
-                    onNext={activeStep === 3 ? goToNextStep : undefined}
-                    nextButtonText="Lakukan Normalisasi Min-Max"
+                    onNext={activeStep === 3 ? () => setActiveStep(4) : undefined}
+                    nextButtonText="Lanjut ke Clustering"
                     showNextButton={activeStep === 3}
                     onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
                 </section>
               )}
 
-              {/* Step 4: Normalized Data */}
+              {/* Step 4: Ready for Clustering */}
               {activeStep >= 4 && normalizedData && (
                 <section>
-                  <DataPreview
-                    data={normalizedData.data}
-                    headers={normalizedData.headers}
-                    title="Data telah dinormalisasi dengan Min-Max scaling"
-                    description="Data telah dinormalisasi menggunakan Min-Max scaling (0-1 normalization). Semua nilai berada dalam rentang 0-1 yang optimal untuk clustering dengan Euclidean distance."
-                    numericalColumns={normalizedData.numericalColumns}
-                    categoricalColumns={normalizedData.categoricalColumns}
-                    onNext={activeStep === 4 ? goToNextStep : undefined}
-                    nextButtonText="Lanjut ke Clustering"
-                    showNextButton={activeStep === 4}
-                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
-                  />
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-start gap-4 mb-6">
+                      <div className="bg-green-100 text-green-700 p-2 rounded-full">
+                        <Database size={20} />
+                      </div>
+                      <div className="flex-1">
+                        <h2 className="text-lg font-semibold text-gray-800">Data Siap untuk Clustering</h2>
+                        <p className="text-gray-600 text-sm mt-1">
+                          Data telah diproses dengan One-Hot Encoding dan siap untuk analisis clustering K-Means.
+                        </p>
+                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                          <h3 className="font-medium text-green-800 mb-2">Ringkasan Preprocessing:</h3>
+                          <ul className="text-sm text-green-700 space-y-1">
+                            <li>✅ <strong>One-Hot Encoding:</strong> {normalizedData.numericalColumns.length} kolom biner</li>
+                            <li>✅ <strong>Normalisasi:</strong> Tidak diperlukan (data sudah dalam skala 0-1)</li>
+                            <li>✅ <strong>Data Points:</strong> {normalizedData.data.length} baris</li>
+                            <li>✅ <strong>Siap untuk K-Means clustering</strong></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      {onPrevious && (
+                        <button
+                          onClick={goToPreviousStep}
+                          className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                        >
+                          <ArrowLeft size={16} />
+                          Sebelumnya
+                        </button>
+                      )}
+                      
+                      <div></div>
+                      
+                      <button
+                        onClick={() => setActiveStep(5)}
+                        className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+                      >
+                        Mulai Clustering
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </section>
               )}
 
@@ -804,7 +845,7 @@ function App() {
                         {/* Visualization */}
                         <Visualization
                           data={experimentResults[activeTab].data}
-                          numericalColumns={normalizedData?.numericalColumns || []}
+                          numericalColumns={normalizedData?.numericalColumns.slice(0, 2) || []} // Use first 2 for visualization
                         />
                       </div>
                     )}

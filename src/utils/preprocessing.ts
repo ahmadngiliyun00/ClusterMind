@@ -58,7 +58,70 @@ export function identifyColumnTypes(data: DataPoint[]): {
 }
 
 /**
- * Mengubah data kategorikal menjadi numerik menggunakan label encoding
+ * One-Hot Encoding untuk data kategorikal
+ * Mengubah setiap nilai kategori menjadi kolom biner (0 atau 1)
+ */
+export function oneHotEncoding(data: DataPoint[], categoricalColumns: string[]): {
+  encodedData: DataPoint[];
+  encodingMaps: EncodingMap;
+  newColumns: string[];
+} {
+  console.log('\n=== ONE-HOT ENCODING ===');
+  console.log(`Processing ${categoricalColumns.length} categorical columns:`, categoricalColumns);
+  
+  const encodingMaps: EncodingMap = {};
+  const newColumns: string[] = [];
+  
+  // Buat copy data
+  const encodedData = data.map(row => ({ ...row }));
+
+  categoricalColumns.forEach(column => {
+    console.log(`\nProcessing column: ${column}`);
+    
+    // Kumpulkan nilai unik dan urutkan
+    const uniqueValues = [...new Set(data.map(row => String(row[column] || '')))].sort();
+    console.log(`  Unique values (${uniqueValues.length}):`, uniqueValues.slice(0, 5), uniqueValues.length > 5 ? '...' : '');
+    
+    // Buat mapping nilai ke kolom baru
+    encodingMaps[column] = {};
+    
+    uniqueValues.forEach(value => {
+      const newColumnName = `${column}_${value.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      newColumns.push(newColumnName);
+      encodingMaps[column][value] = newColumnName;
+      
+      // Inisialisasi kolom baru dengan 0 untuk semua baris
+      encodedData.forEach(row => {
+        row[newColumnName] = 0;
+      });
+    });
+
+    // Set nilai 1 untuk kategori yang sesuai
+    encodedData.forEach(row => {
+      const originalValue = String(row[column] || '');
+      const newColumnName = encodingMaps[column][originalValue];
+      if (newColumnName) {
+        row[newColumnName] = 1;
+      }
+      
+      // Hapus kolom asli
+      delete row[column];
+    });
+    
+    console.log(`  Created ${uniqueValues.length} new binary columns`);
+  });
+
+  console.log(`\nOne-Hot Encoding completed:`);
+  console.log(`  Original categorical columns: ${categoricalColumns.length}`);
+  console.log(`  New binary columns: ${newColumns.length}`);
+  console.log(`  Sample new columns:`, newColumns.slice(0, 5));
+
+  return { encodedData, encodingMaps, newColumns };
+}
+
+/**
+ * Label Encoding untuk data kategorikal (metode lama)
+ * Mengubah setiap nilai kategori menjadi angka berurutan
  */
 export function labelEncoding(data: DataPoint[], categoricalColumns: string[]): {
   encodedData: DataPoint[];
@@ -101,7 +164,7 @@ export function minMaxNormalization(
   const columnStats: { [key: string]: ColumnStats } = {};
   const normalizedData = data.map(row => ({ ...row })); // Deep copy
 
-  console.log('=== MIN-MAX NORMALIZATION ===');
+  console.log('\n=== MIN-MAX NORMALIZATION ===');
   console.log(`Normalizing ${numericalColumns.length} columns:`, numericalColumns);
 
   numericalColumns.forEach(column => {
@@ -197,7 +260,54 @@ export function zScoreNormalization(
 }
 
 /**
- * Fungsi utama untuk melakukan pra-pemrosesan data dengan Min-Max normalization
+ * Fungsi utama untuk melakukan pra-pemrosesan data dengan One-Hot Encoding
+ */
+export function preprocessDataWithOneHot(data: DataPoint[]): {
+  processedData: DataPoint[];
+  encodingMaps: EncodingMap;
+  columnStats: { [key: string]: ColumnStats };
+  categoricalColumns: string[];
+  numericalColumns: string[];
+  newBinaryColumns: string[];
+} {
+  console.log('\n🔄 PREPROCESSING WITH ONE-HOT ENCODING');
+  console.log('='.repeat(50));
+  
+  // Identifikasi tipe kolom
+  const { categoricalColumns, numericalColumns } = identifyColumnTypes(data);
+  
+  console.log(`Original data structure:`);
+  console.log(`  Categorical columns: ${categoricalColumns.length}`);
+  console.log(`  Numerical columns: ${numericalColumns.length}`);
+
+  // One-Hot encoding untuk kolom kategorikal
+  const { encodedData, encodingMaps, newColumns } = oneHotEncoding(data, categoricalColumns);
+
+  // Semua kolom sekarang menjadi numerik (binary 0/1 dari one-hot + kolom numerik asli)
+  const allNumericalColumns = [...numericalColumns, ...newColumns];
+  
+  console.log(`After One-Hot Encoding:`);
+  console.log(`  Total numerical columns: ${allNumericalColumns.length}`);
+  console.log(`  Binary columns from One-Hot: ${newColumns.length}`);
+  console.log(`  Original numerical columns: ${numericalColumns.length}`);
+
+  // TIDAK PERLU NORMALISASI karena One-Hot Encoding sudah menghasilkan nilai 0 dan 1
+  // yang sudah dalam skala yang sama
+  console.log('\n✅ SKIPPING NORMALIZATION');
+  console.log('Reason: One-Hot Encoding produces binary values (0,1) - already normalized');
+
+  return {
+    processedData: encodedData,
+    encodingMaps,
+    columnStats: {}, // Kosong karena tidak ada normalisasi
+    categoricalColumns: [], // Tidak ada lagi kolom kategorikal
+    numericalColumns: allNumericalColumns,
+    newBinaryColumns: newColumns
+  };
+}
+
+/**
+ * Fungsi utama untuk melakukan pra-pemrosesan data dengan Label Encoding + Min-Max (metode lama)
  */
 export function preprocessData(data: DataPoint[]): {
   processedData: DataPoint[];
@@ -226,7 +336,41 @@ export function preprocessData(data: DataPoint[]): {
 }
 
 /**
- * Perform nominal to numerical conversion
+ * Perform nominal to numerical conversion with One-Hot Encoding
+ */
+export async function performOneHotEncoding(rawData: ParsedData): Promise<ParsedData> {
+  const { categoricalColumns, numericalColumns } = identifyColumnTypes(rawData.data);
+  
+  if (categoricalColumns.length === 0) {
+    // No categorical columns to convert
+    return {
+      ...rawData,
+      numericalColumns: [...numericalColumns],
+      categoricalColumns: []
+    };
+  }
+  
+  // One-Hot encoding untuk kolom kategorikal
+  const { encodedData, encodingMaps, newColumns } = oneHotEncoding(rawData.data, categoricalColumns);
+  
+  // Semua kolom sekarang menjadi numerik
+  const allNumericalColumns = [...numericalColumns, ...newColumns];
+  
+  // Update headers untuk menghilangkan kolom kategorikal lama dan menambah kolom baru
+  const newHeaders = rawData.headers.filter(h => !categoricalColumns.includes(h)).concat(newColumns);
+  
+  return {
+    data: encodedData,
+    headers: newHeaders,
+    numericalColumns: allNumericalColumns,
+    categoricalColumns: [], // Tidak ada lagi kolom kategorikal
+    encodingMaps,
+    columnStats: rawData.columnStats
+  };
+}
+
+/**
+ * Perform nominal to numerical conversion with Label Encoding (metode lama)
  */
 export async function performNominalToNumerical(rawData: ParsedData): Promise<ParsedData> {
   const { categoricalColumns, numericalColumns } = identifyColumnTypes(rawData.data);
@@ -257,11 +401,28 @@ export async function performNominalToNumerical(rawData: ParsedData): Promise<Pa
 }
 
 /**
- * Perform Min-Max normalization on numerical data (NEW DEFAULT)
+ * Perform Min-Max normalization on numerical data (DEFAULT - TIDAK DIGUNAKAN UNTUK ONE-HOT)
  */
 export async function performNormalization(numericalData: ParsedData): Promise<ParsedData> {
-  console.log('\n=== SWITCHING TO MIN-MAX NORMALIZATION ===');
-  console.log('Using Min-Max scaling (0-1) instead of Z-score normalization');
+  console.log('\n=== NORMALIZATION STEP ===');
+  console.log('Note: For One-Hot Encoded data, normalization is usually not needed');
+  console.log('One-Hot Encoding already produces binary values (0,1) in the same scale');
+  
+  // Cek apakah data sudah dalam bentuk binary (hasil One-Hot Encoding)
+  const sampleValues = numericalData.data.slice(0, 10);
+  const isBinaryData = sampleValues.every(row => 
+    numericalData.numericalColumns.every(col => {
+      const val = Number(row[col]);
+      return val === 0 || val === 1 || isNaN(val);
+    })
+  );
+  
+  if (isBinaryData) {
+    console.log('✅ Data appears to be binary (One-Hot Encoded) - skipping normalization');
+    return numericalData;
+  }
+  
+  console.log('🔄 Data contains non-binary values - applying Min-Max normalization');
   
   const { normalizedData, columnStats } = minMaxNormalization(
     numericalData.data,
