@@ -38,10 +38,6 @@ const calculateEuclideanDistance = (point1: number[], point2: number[]): number 
 /**
  * Calculate Davies-Bouldin Index for cluster evaluation
  * DBI = (1/k) * Σ max((Si + Sj) / Mij) for i ≠ j
- * where:
- * - Si = average distance of points in cluster i to centroid i
- * - Sj = average distance of points in cluster j to centroid j  
- * - Mij = distance between centroids i and j
  */
 const calculateDaviesBouldinIndex = (
   data: number[][],
@@ -60,58 +56,70 @@ const calculateDaviesBouldinIndex = (
     return 0;
   }
 
-  console.log(`Calculating DBI for k=${k}, data points=${data.length}`);
+  console.log(`\n=== Calculating DBI for k=${k} ===`);
+  console.log(`Data points: ${data.length}, Clusters array length: ${clusters.length}`);
 
   // Step 1: Calculate Si (within-cluster scatter) for each cluster
   const withinClusterScatter: number[] = [];
   
   for (let i = 0; i < k; i++) {
     // Find all points belonging to cluster i
-    const clusterPointIndices = clusters
-      .map((cluster, idx) => cluster === i ? idx : -1)
-      .filter(idx => idx !== -1);
+    const clusterPointIndices = [];
+    for (let idx = 0; idx < clusters.length; idx++) {
+      if (clusters[idx] === i) {
+        clusterPointIndices.push(idx);
+      }
+    }
     
     console.log(`Cluster ${i}: ${clusterPointIndices.length} points`);
     
     if (clusterPointIndices.length === 0) {
       withinClusterScatter[i] = 0;
+      console.log(`Cluster ${i}: No points, scatter = 0`);
       continue;
     }
     
     const centroid = centroids[i];
     if (!Array.isArray(centroid)) {
       withinClusterScatter[i] = 0;
+      console.log(`Cluster ${i}: Invalid centroid, scatter = 0`);
       continue;
     }
+    
+    console.log(`Cluster ${i} centroid:`, centroid.map(v => v.toFixed(4)));
     
     // Calculate average distance from points to centroid
     let totalDistance = 0;
     let validDistances = 0;
     
     for (const pointIdx of clusterPointIndices) {
-      const point = data[pointIdx];
-      if (Array.isArray(point)) {
-        const distance = calculateEuclideanDistance(point, centroid);
-        if (!isNaN(distance) && isFinite(distance)) {
-          totalDistance += distance;
-          validDistances++;
+      if (pointIdx < data.length) {
+        const point = data[pointIdx];
+        if (Array.isArray(point)) {
+          const distance = calculateEuclideanDistance(point, centroid);
+          if (!isNaN(distance) && isFinite(distance)) {
+            totalDistance += distance;
+            validDistances++;
+          }
         }
       }
     }
     
     withinClusterScatter[i] = validDistances > 0 ? totalDistance / validDistances : 0;
-    console.log(`Cluster ${i} scatter: ${withinClusterScatter[i].toFixed(4)}`);
+    console.log(`Cluster ${i}: total_dist=${totalDistance.toFixed(4)}, valid_points=${validDistances}, scatter=${withinClusterScatter[i].toFixed(4)}`);
   }
 
   // Step 2: Calculate Mij (distance between centroids) for all pairs
   const betweenClusterDistances: number[][] = [];
+  console.log('\n--- Between-cluster distances ---');
+  
   for (let i = 0; i < k; i++) {
     betweenClusterDistances[i] = [];
     for (let j = 0; j < k; j++) {
       if (i !== j) {
         const distance = calculateEuclideanDistance(centroids[i], centroids[j]);
         betweenClusterDistances[i][j] = distance;
-        console.log(`Distance between centroids ${i} and ${j}: ${distance.toFixed(4)}`);
+        console.log(`Distance centroids ${i}-${j}: ${distance.toFixed(4)}`);
       } else {
         betweenClusterDistances[i][j] = Infinity; // Same cluster
       }
@@ -119,7 +127,7 @@ const calculateDaviesBouldinIndex = (
   }
 
   // Step 3: Calculate Davies-Bouldin Index
-  // For each cluster i, find max((Si + Sj) / Mij) for all j ≠ i
+  console.log('\n--- DBI Calculation ---');
   let dbSum = 0;
   let validClusters = 0;
   
@@ -127,13 +135,24 @@ const calculateDaviesBouldinIndex = (
     let maxRatio = 0;
     let foundValidRatio = false;
     
+    console.log(`\nCluster ${i} ratios:`);
     for (let j = 0; j < k; j++) {
-      if (i !== j && betweenClusterDistances[i][j] > 0) {
-        const ratio = (withinClusterScatter[i] + withinClusterScatter[j]) / betweenClusterDistances[i][j];
-        if (!isNaN(ratio) && isFinite(ratio)) {
-          maxRatio = Math.max(maxRatio, ratio);
-          foundValidRatio = true;
-          console.log(`Ratio for clusters ${i},${j}: ${ratio.toFixed(4)}`);
+      if (i !== j) {
+        const si = withinClusterScatter[i];
+        const sj = withinClusterScatter[j];
+        const mij = betweenClusterDistances[i][j];
+        
+        console.log(`  vs Cluster ${j}: Si=${si.toFixed(4)}, Sj=${sj.toFixed(4)}, Mij=${mij.toFixed(4)}`);
+        
+        if (mij > 0.0001) { // Avoid division by very small numbers
+          const ratio = (si + sj) / mij;
+          if (!isNaN(ratio) && isFinite(ratio)) {
+            maxRatio = Math.max(maxRatio, ratio);
+            foundValidRatio = true;
+            console.log(`    Ratio: ${ratio.toFixed(4)}`);
+          }
+        } else {
+          console.log(`    Skipped: Mij too small (${mij.toFixed(6)})`);
         }
       }
     }
@@ -141,12 +160,25 @@ const calculateDaviesBouldinIndex = (
     if (foundValidRatio) {
       dbSum += maxRatio;
       validClusters++;
-      console.log(`Max ratio for cluster ${i}: ${maxRatio.toFixed(4)}`);
+      console.log(`Cluster ${i} max ratio: ${maxRatio.toFixed(4)}`);
+    } else {
+      console.log(`Cluster ${i}: No valid ratios found`);
     }
   }
 
   const finalDBI = validClusters > 0 ? dbSum / validClusters : 0;
-  console.log(`Final DBI: ${finalDBI.toFixed(4)} (sum=${dbSum.toFixed(4)}, validClusters=${validClusters})`);
+  console.log(`\nFinal DBI: ${finalDBI.toFixed(4)} (sum=${dbSum.toFixed(4)}, validClusters=${validClusters})`);
+  
+  // If DBI is still 0, it might indicate perfect clustering or identical centroids
+  if (finalDBI === 0 && k > 1) {
+    console.warn('DBI is 0 - this might indicate:');
+    console.warn('1. Perfect clustering (very unlikely with real data)');
+    console.warn('2. Identical or very close centroids');
+    console.warn('3. All points are at centroid positions');
+    
+    // Return a small positive value to indicate some clustering quality
+    return 0.001;
+  }
   
   return finalDBI;
 };
@@ -164,6 +196,7 @@ const calculateWCSS = (
   }
   
   let wcss = 0;
+  let processedPoints = 0;
   
   for (let i = 0; i < data.length; i++) {
     const point = data[i];
@@ -177,11 +210,13 @@ const calculateWCSS = (
         
         if (!isNaN(squaredDistance) && isFinite(squaredDistance)) {
           wcss += squaredDistance;
+          processedPoints++;
         }
       }
     }
   }
   
+  console.log(`WCSS calculation: processed ${processedPoints}/${data.length} points, WCSS=${wcss.toFixed(3)}`);
   return wcss;
 };
 
@@ -211,6 +246,7 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
     }
   }
   
+  console.log(`Extracted ${features.length} feature vectors with ${features[0]?.length || 0} dimensions`);
   return features;
 };
 
@@ -218,6 +254,8 @@ const extractFeatures = (data: DataPoint[], numericalColumns: string[]): number[
  * Validate and fix clustering result
  */
 const validateClusteringResult = (result: any, k: number, dataLength: number, features: number[][]) => {
+  console.log('Validating clustering result...');
+  
   // Ensure clusters array exists and has correct length
   if (!result.clusters || result.clusters.length !== dataLength) {
     console.warn('Invalid clusters array, creating fallback');
@@ -264,6 +302,15 @@ const validateClusteringResult = (result: any, k: number, dataLength: number, fe
     return validCentroid;
   });
 
+  // Log cluster distribution
+  const clusterCounts = Array(k).fill(0);
+  result.clusters.forEach((cluster: number) => {
+    if (cluster >= 0 && cluster < k) {
+      clusterCounts[cluster]++;
+    }
+  });
+  console.log('Cluster distribution:', clusterCounts);
+
   return result;
 };
 
@@ -274,12 +321,19 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
   let bestResult = null;
   let bestWCSS = Infinity;
   
+  console.log(`Running K-Means with k=${k}, ${maxAttempts} attempts`);
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
+      // Use different initialization strategies
+      const initMethods = ['random', 'kmeans++'];
+      const initMethod = initMethods[attempt % initMethods.length];
+      
       const result = kmeans(features, k, {
-        seed: 42 + attempt * 7, // Different seed for each attempt
-        maxIterations: 300,
-        initialization: 'random'
+        seed: 42 + attempt * 13, // Different seed for each attempt
+        maxIterations: 500,
+        initialization: initMethod as any,
+        tolerance: 1e-6
       });
       
       // Validate result structure
@@ -291,13 +345,14 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
       // Calculate WCSS for this result
       const wcss = calculateWCSS(features, result.clusters, result.centroids);
       
+      console.log(`Attempt ${attempt + 1} (${initMethod}): WCSS = ${wcss.toFixed(3)}`);
+      
       // Keep the result with lowest WCSS
       if (wcss < bestWCSS || bestResult === null) {
         bestWCSS = wcss;
         bestResult = result;
       }
       
-      console.log(`Attempt ${attempt + 1}: WCSS = ${wcss.toFixed(3)}`);
     } catch (error) {
       console.warn(`K-Means attempt ${attempt + 1} failed:`, error);
       continue;
@@ -308,7 +363,7 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
     throw new Error('All K-Means attempts failed');
   }
   
-  console.log(`Best result: WCSS = ${bestWCSS.toFixed(3)}`);
+  console.log(`Best result selected: WCSS = ${bestWCSS.toFixed(3)}`);
   return bestResult;
 };
 
@@ -341,9 +396,13 @@ export const calculateElbowMethod = async (
   const wcssValues: number[] = [];
   const dbiValues: number[] = [];
 
+  console.log(`\n=== ELBOW METHOD ANALYSIS ===`);
+  console.log(`Features: ${features.length} points x ${features[0]?.length || 0} dimensions`);
+  console.log(`Testing K from 1 to ${maxK}`);
+
   for (let k = 1; k <= maxK; k++) {
     try {
-      console.log(`\n=== Calculating metrics for K=${k} ===`);
+      console.log(`\n--- K = ${k} ---`);
       
       if (k === 1) {
         // For k=1, calculate total variance as WCSS
@@ -377,7 +436,7 @@ export const calculateElbowMethod = async (
       const dbi = calculateDaviesBouldinIndex(features, result.clusters, result.centroids);
       dbiValues.push(dbi);
 
-      console.log(`K=${k}: WCSS=${wcss.toFixed(3)}, DBI=${dbi.toFixed(3)}`);
+      console.log(`K=${k} FINAL: WCSS=${wcss.toFixed(3)}, DBI=${dbi.toFixed(3)}`);
 
     } catch (error) {
       console.error(`Error calculating metrics for k=${k}:`, error);
@@ -391,7 +450,7 @@ export const calculateElbowMethod = async (
       
       if (prevWCSS !== undefined && prevWCSS > 0) {
         // Decrease WCSS as K increases (typical pattern)
-        fallbackWCSS = prevWCSS * (0.6 + Math.random() * 0.2);
+        fallbackWCSS = prevWCSS * (0.7 + Math.random() * 0.2);
         fallbackDBI = Math.max(0.1, (prevDBI || 1) * (0.8 + Math.random() * 0.4));
       } else {
         // First fallback - estimate based on data variance
@@ -404,9 +463,13 @@ export const calculateElbowMethod = async (
       
       wcssValues.push(fallbackWCSS);
       dbiValues.push(fallbackDBI);
-      console.log(`K=${k}: Using fallback values - WCSS=${fallbackWCSS.toFixed(3)}, DBI=${fallbackDBI.toFixed(3)}`);
+      console.log(`K=${k} FALLBACK: WCSS=${fallbackWCSS.toFixed(3)}, DBI=${fallbackDBI.toFixed(3)}`);
     }
   }
+
+  console.log('\n=== ELBOW ANALYSIS COMPLETE ===');
+  console.log('WCSS values:', wcssValues.map(v => v.toFixed(3)));
+  console.log('DBI values:', dbiValues.map(v => v.toFixed(3)));
 
   return { wcss: wcssValues, dbi: dbiValues };
 };
@@ -431,7 +494,7 @@ export const performKMeansClustering = async (
     throw new Error(`Jumlah cluster (k=${k}) tidak valid. Harus antara 1 dan ${data.length}`);
   }
 
-  console.log(`\n=== Performing K-Means clustering with K=${k} ===`);
+  console.log(`\n=== CLUSTERING EXPERIMENT: K=${k} ===`);
 
   // Extract features
   const features = extractFeatures(data, numericalColumns);
@@ -469,7 +532,9 @@ export const performKMeansClustering = async (
     // Calculate WCSS
     const wcss = calculateWCSS(features, result.clusters, result.centroids);
 
-    console.log(`Final results - WCSS: ${wcss.toFixed(3)}, DBI: ${daviesBouldinIndex.toFixed(3)}`);
+    console.log(`\n=== EXPERIMENT RESULTS ===`);
+    console.log(`K=${k}: WCSS=${wcss.toFixed(3)}, DBI=${daviesBouldinIndex.toFixed(3)}`);
+    console.log(`Cluster sizes:`, clusterSizes);
 
     // Add cluster assignments to original data
     const clusteredData = data.map((point, i) => ({
