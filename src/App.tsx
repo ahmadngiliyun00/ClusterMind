@@ -849,7 +849,7 @@ function App() {
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                            <span>Filter kolom dengan cardinality tinggi (>50 nilai unik)</span>
+                            <span>Filter kolom dengan cardinality tinggi ({'>'}50 nilai unik)</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
@@ -870,7 +870,7 @@ function App() {
                               Smart Filtering untuk Clustering Optimal
                             </p>
                             <p className="text-xs text-yellow-700 mt-1">
-                              Sistem akan otomatis mengecualikan kolom dengan cardinality sangat tinggi (>50 nilai unik)
+                              Sistem akan otomatis mengecualikan kolom dengan cardinality sangat tinggi ({'>'}50 nilai unik)
                             </p>
                           </div>
                         </div>
