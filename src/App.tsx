@@ -94,31 +94,76 @@ function App() {
     }
   };
 
-  // Run clustering experiments
+  // Add delay function for better UX
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Run clustering experiments with proper progress
   const runClusteringExperiments = async (experiments: ClusterExperiment[]) => {
     if (!normalizedData) return;
     
     try {
       setIsLoading(true);
+      setExperimentResults([]); // Clear previous results
+      
+      console.log('\n🔬 STARTING CLUSTERING EXPERIMENTS');
+      console.log('='.repeat(60));
+      console.log(`Dataset: ${normalizedData.data.length} rows x ${normalizedData.numericalColumns.length} features`);
+      console.log(`Features: [${normalizedData.numericalColumns.join(', ')}]`);
+      console.log(`Total experiments: ${experiments.length}`);
+      console.log('='.repeat(60));
+      
       const results: ExperimentResult[] = [];
       
-      for (const experiment of experiments) {
+      for (let i = 0; i < experiments.length; i++) {
+        const experiment = experiments[i];
+        
+        console.log(`\n📊 EXPERIMENT ${i + 1}/${experiments.length}: ${experiment.name}`);
+        console.log('-'.repeat(40));
+        console.log(`K = ${experiment.k}`);
+        console.log(`Starting clustering process...`);
+        
         try {
+          // Add delay to show progress
+          await delay(500);
+          
+          const startTime = Date.now();
+          
           const result = await performKMeansClustering(
             normalizedData.data,
             normalizedData.numericalColumns,
             experiment.k
           );
           
-          results.push({
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          const experimentResult: ExperimentResult = {
             ...result,
             experimentName: experiment.name,
             k: experiment.k,
             daviesBouldinIndex: result.daviesBouldinIndex || 0,
             wcss: result.wcss || 0
-          });
+          };
+          
+          results.push(experimentResult);
+          
+          console.log(`✅ EXPERIMENT ${i + 1} COMPLETED`);
+          console.log(`Duration: ${duration}ms`);
+          console.log(`K=${experiment.k}: WCSS=${result.wcss?.toFixed(3)}, DBI=${result.daviesBouldinIndex?.toFixed(3)}`);
+          console.log(`Cluster sizes: [${result.clusterSizes.join(', ')}]`);
+          console.log('-'.repeat(40));
+          
+          // Update results incrementally for better UX
+          setExperimentResults([...results]);
+          
+          // Add delay between experiments
+          if (i < experiments.length - 1) {
+            await delay(300);
+          }
+          
         } catch (error) {
-          console.error(`Error in experiment ${experiment.name}:`, error);
+          console.error(`❌ EXPERIMENT ${i + 1} FAILED:`, error);
+          console.log(`Skipping ${experiment.name} due to error`);
           // Continue with other experiments
         }
       }
@@ -127,9 +172,18 @@ function App() {
         throw new Error('Tidak ada eksperimen yang berhasil dijalankan');
       }
       
+      console.log('\n🎉 ALL EXPERIMENTS COMPLETED');
+      console.log('='.repeat(60));
+      console.log('SUMMARY:');
+      results.forEach((result, i) => {
+        console.log(`${i + 1}. ${result.experimentName}: K=${result.k}, WCSS=${result.wcss.toFixed(3)}, DBI=${result.daviesBouldinIndex.toFixed(3)}`);
+      });
+      console.log('='.repeat(60));
+      
       setExperimentResults(results);
       setActiveStep(5);
       setActiveTab(0); // Reset to first tab
+      
     } catch (error) {
       console.error('Error performing clustering experiments:', error);
       alert('Terjadi kesalahan saat melakukan eksperimen clustering: ' + (error as Error).message);
@@ -138,16 +192,24 @@ function App() {
     }
   };
 
-  // Run Elbow Method
+  // Run Elbow Method with progress
   const runElbowMethod = async () => {
     if (!normalizedData) return;
     
     try {
       setIsLoading(true);
+      
+      console.log('\n📈 STARTING ELBOW METHOD ANALYSIS');
+      console.log('='.repeat(50));
+      
       const elbowResult = await calculateElbowMethod(
         normalizedData.data,
         normalizedData.numericalColumns
       );
+      
+      console.log('\n✅ ELBOW ANALYSIS COMPLETED');
+      console.log('='.repeat(50));
+      
       setElbowData(elbowResult);
       setActiveStep(6);
     } catch (error) {
@@ -197,7 +259,7 @@ function App() {
       // All numerical - skip to normalization
       return {
         nextStep: 4,
-        buttonText: "Lakukan Normalisasi (Z-Score)",
+        buttonText: "Lakukan Normalisasi (Min-Max)",
         action: handleNormalization
       };
     }
@@ -295,7 +357,7 @@ function App() {
               <h2 className="text-2xl font-bold mb-4 text-indigo-700">Tentang ClusterMind</h2>
               <p className="text-gray-700 mb-6">
                 ClusterMind adalah aplikasi web interaktif yang dirancang untuk membantu Anda melakukan 
-                clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan Z-score normalization 
+                clustering data secara mudah dan cepat menggunakan algoritma K-Means dengan Min-Max normalization 
                 dan Euclidean distance. Analisis data Anda langsung di browser, tanpa perlu menginstal software tambahan.
               </p>
               
@@ -304,9 +366,9 @@ function App() {
                   <div className="bg-indigo-100 p-3 rounded-full inline-block mb-4">
                     <Brain className="h-6 w-6 text-indigo-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">K-Means + Z-Score</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-indigo-700">K-Means + Min-Max</h3>
                   <p className="text-gray-700 text-sm">
-                    Clustering dengan normalisasi Z-score dan Euclidean distance untuk hasil yang optimal.
+                    Clustering dengan normalisasi Min-Max dan Euclidean distance untuk hasil yang optimal.
                   </p>
                 </div>
                 
@@ -375,7 +437,7 @@ function App() {
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">TypeScript</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Tailwind CSS</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">ml-kmeans</span>
-                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Z-Score Normalization</span>
+                <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Min-Max Normalization</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">Euclidean Distance</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">PapaParse</span>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-gray-700">XLSX</span>
@@ -424,7 +486,7 @@ function App() {
                   <span>Upload</span>
                   <span>Preview</span>
                   <span>Numerical</span>
-                  <span>Z-Score</span>
+                  <span>Min-Max</span>
                   <span>Clustering</span>
                   <span>Elbow</span>
                 </div>
@@ -480,11 +542,11 @@ function App() {
                     data={numericalData.data}
                     headers={numericalData.headers}
                     title="Data telah dikonversi ke numerik"
-                    description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi dengan Z-score."
+                    description="Semua kolom kategorikal telah dikonversi menjadi numerik menggunakan label encoding. Data siap untuk dinormalisasi dengan Min-Max scaling."
                     numericalColumns={numericalData.numericalColumns}
                     categoricalColumns={numericalData.categoricalColumns}
                     onNext={activeStep === 3 ? goToNextStep : undefined}
-                    nextButtonText="Lakukan Normalisasi Z-Score"
+                    nextButtonText="Lakukan Normalisasi Min-Max"
                     showNextButton={activeStep === 3}
                     onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
                   />
@@ -497,8 +559,8 @@ function App() {
                   <DataPreview
                     data={normalizedData.data}
                     headers={normalizedData.headers}
-                    title="Data telah dinormalisasi dengan Z-Score"
-                    description="Data telah dinormalisasi menggunakan Z-score transformation (standardization). Data memiliki mean = 0 dan standard deviation = 1. Data siap untuk clustering dengan Euclidean distance."
+                    title="Data telah dinormalisasi dengan Min-Max scaling"
+                    description="Data telah dinormalisasi menggunakan Min-Max scaling (0-1 normalization). Semua nilai berada dalam rentang 0-1 yang optimal untuk clustering dengan Euclidean distance."
                     numericalColumns={normalizedData.numericalColumns}
                     categoricalColumns={normalizedData.categoricalColumns}
                     onNext={activeStep === 4 ? goToNextStep : undefined}

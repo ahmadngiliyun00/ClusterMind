@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Play, BarChart3 } from 'lucide-react';
+import { Plus, Trash2, Play, BarChart3, Clock, CheckCircle } from 'lucide-react';
 
 interface ClusterExperiment {
   id: string;
@@ -57,6 +57,12 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   };
 
   const handleRunExperiments = () => {
+    console.log('\n🚀 STARTING CLUSTERING EXPERIMENTS');
+    console.log('='.repeat(50));
+    console.log(`Total experiments: ${experiments.length}`);
+    console.log('Experiments to run:', experiments.map(exp => `${exp.name} (K=${exp.k})`).join(', '));
+    console.log('='.repeat(50));
+    
     onRunExperiments(experiments);
   };
 
@@ -167,10 +173,44 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
         </div>
       </div>
 
+      {/* Loading State with Progress */}
       {isLoading && (
-        <div className="mt-4 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-          <p className="mt-2 text-sm text-gray-600">Memproses eksperimen clustering...</p>
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+            <h3 className="text-lg font-medium text-gray-800">Memproses Eksperimen Clustering</h3>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Clock size={16} />
+              <span>Sedang menjalankan algoritma K-Means untuk setiap nilai K...</span>
+            </div>
+            
+            <div className="bg-white p-3 rounded border">
+              <p className="text-sm font-medium text-gray-700 mb-2">Progress:</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Ekstraksi fitur numerik dari data</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Menjalankan K-Means untuk setiap eksperimen</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Menghitung metrik evaluasi (WCSS & DBI)</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+              <p className="text-sm text-yellow-800">
+                <strong>💡 Tip:</strong> Buka Developer Console (F12) untuk melihat detail perhitungan setiap eksperimen
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
