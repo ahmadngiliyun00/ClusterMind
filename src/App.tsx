@@ -11,7 +11,7 @@ import { performKMeansClustering, calculateElbowMethodFromExperiments } from './
 import type { ClusteringResult } from './utils/clustering';
 import { performOneHotEncoding, performNormalization } from './utils/preprocessing';
 
-import { Brain, BarChart3, Users, ArrowRight, Share2, Menu, X, Database, Zap } from 'lucide-react';
+import { Brain, BarChart3, Users, ArrowRight, Share2, Menu, X, Database, Zap, ArrowLeft } from 'lucide-react';
 
 interface ClusterExperiment {
   id: string;
@@ -738,7 +738,7 @@ function App() {
                     </div>
                     
                     <div className="flex justify-between">
-                      {onPrevious && (
+                      {activeStep > 1 && (
                         <button
                           onClick={goToPreviousStep}
                           className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
