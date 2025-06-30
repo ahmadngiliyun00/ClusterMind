@@ -7,7 +7,7 @@ import Visualization from './components/Visualization';
 import ElbowAnalysis from './components/ElbowAnalysis';
 import { parseFile } from './utils/csv';
 import type { ParsedData, DataPoint } from './utils/csv';
-import { performKMeansClustering, calculateElbowMethod } from './utils/clustering';
+import { performKMeansClustering, calculateElbowMethodFromExperiments } from './utils/clustering';
 import type { ClusteringResult } from './utils/clustering';
 import { performNominalToNumerical, performNormalization } from './utils/preprocessing';
 
@@ -32,11 +32,12 @@ function App() {
   const [numericalData, setNumericalData] = useState<ParsedData | null>(null);
   const [normalizedData, setNormalizedData] = useState<ParsedData | null>(null);
   const [experimentResults, setExperimentResults] = useState<ExperimentResult[]>([]);
+  const [currentExperiments, setCurrentExperiments] = useState<ClusterExperiment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState<string>('');
   const [currentExperiment, setCurrentExperiment] = useState<number>(0);
   const [totalExperiments, setTotalExperiments] = useState<number>(0);
-  const [elbowData, setElbowData] = useState<{ wcss: number[]; dbi: number[] } | null>(null);
+  const [elbowData, setElbowData] = useState<{ wcss: number[]; dbi: number[]; kValues: number[] } | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [showAbout, setShowAbout] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -51,6 +52,7 @@ function App() {
       setNumericalData(null);
       setNormalizedData(null);
       setExperimentResults([]);
+      setCurrentExperiments([]);
       setElbowData(null);
       setActiveStep(2);
       setShowAbout(false);
@@ -108,6 +110,7 @@ function App() {
       setIsLoading(true);
       setExperimentResults([]); // Clear previous results immediately
       setElbowData(null); // Clear elbow data when running new experiments
+      setCurrentExperiments(experiments); // Store current experiments for elbow analysis
       setCurrentExperiment(0);
       setTotalExperiments(experiments.length);
       setLoadingProgress('Memulai eksperimen clustering...');
@@ -242,13 +245,19 @@ function App() {
     }
   };
 
-  // Run Elbow Method with enhanced progress and logging
+  // Run Elbow Method with enhanced progress and logging - FIXED TO USE EXPERIMENT K VALUES
   const runElbowMethod = async () => {
-    if (!normalizedData) return;
+    if (!normalizedData || currentExperiments.length === 0) {
+      alert('Tidak ada eksperimen yang tersedia untuk analisis elbow');
+      return;
+    }
     
     try {
       setIsLoading(true);
       setLoadingProgress('Memulai analisis Elbow Method...');
+      
+      // Get K values from current experiments
+      const kValues = currentExperiments.map(exp => exp.k).sort((a, b) => a - b);
       
       // Clear console and start logging
       console.clear();
@@ -256,20 +265,22 @@ function App() {
       console.log('='.repeat(80));
       console.log(`📊 Dataset: ${normalizedData.data.length} rows × ${normalizedData.numericalColumns.length} features`);
       console.log(`🔢 Features: [${normalizedData.numericalColumns.join(', ')}]`);
-      console.log(`📋 Testing K values from 1 to ${Math.min(10, Math.floor(normalizedData.data.length / 3))}`);
+      console.log(`📋 Testing K values from experiments: [${kValues.join(', ')}]`);
+      console.log(`🧪 Total K values to test: ${kValues.length}`);
       console.log('='.repeat(80));
       
       // Add delay to show loading state
       await delay(1000);
       
-      setLoadingProgress('Menghitung WCSS dan DBI untuk berbagai nilai K...');
+      setLoadingProgress('Menghitung WCSS dan DBI untuk nilai K dari eksperimen...');
       await delay(500);
       
       setLoadingProgress('Menganalisis pola elbow untuk menentukan K optimal...');
       
-      const elbowResult = await calculateElbowMethod(
+      const elbowResult = await calculateElbowMethodFromExperiments(
         normalizedData.data,
-        normalizedData.numericalColumns
+        normalizedData.numericalColumns,
+        kValues
       );
       
       console.log('\n✅ ELBOW ANALYSIS COMPLETED');
@@ -279,14 +290,14 @@ function App() {
       console.log('| K | WCSS      | DBI      |');
       console.log('|---|-----------|----------|');
       elbowResult.wcss.forEach((wcss, i) => {
-        const k = i + 1;
-        const dbi = k === 1 ? '-' : elbowResult.dbi[i]?.toFixed(3) || 'N/A';
+        const k = kValues[i];
+        const dbi = elbowResult.dbi[i]?.toFixed(3) || 'N/A';
         console.log(`| ${k.toString().padStart(1)} | ${wcss.toFixed(3).padStart(9)} | ${dbi.padStart(8)} |`);
       });
       
       // Find elbow point
-      const elbowK = findElbowPoint(elbowResult.wcss);
-      const optimalDBI = findOptimalDBI(elbowResult.dbi);
+      const elbowK = findElbowPoint(elbowResult.wcss, kValues);
+      const optimalDBI = findOptimalDBI(elbowResult.dbi, kValues);
       
       console.log('\n🎯 RECOMMENDATIONS:');
       if (elbowK) {
@@ -298,7 +309,11 @@ function App() {
       console.log('='.repeat(80));
       console.log('💡 Tip: Look for the "elbow" in WCSS graph and minimum DBI value');
       
-      setElbowData(elbowResult);
+      setElbowData({
+        wcss: elbowResult.wcss,
+        dbi: elbowResult.dbi,
+        kValues: kValues
+      });
       setActiveStep(6); // Move to step 6 for elbow analysis
       
     } catch (error) {
@@ -310,12 +325,12 @@ function App() {
     }
   };
 
-  // Helper functions for elbow analysis
-  const findElbowPoint = (wcssValues: number[]): number | null => {
+  // Helper functions for elbow analysis - UPDATED TO USE K VALUES
+  const findElbowPoint = (wcssValues: number[], kValues: number[]): number | null => {
     if (wcssValues.length < 3) return null;
     
     let maxDiff = 0;
-    let elbowK = 2;
+    let elbowK = kValues[1]; // Start from second K value
     
     for (let i = 1; i < wcssValues.length - 1; i++) {
       const diff1 = wcssValues[i - 1] - wcssValues[i];
@@ -324,23 +339,23 @@ function App() {
       
       if (totalDiff > maxDiff) {
         maxDiff = totalDiff;
-        elbowK = i + 1;
+        elbowK = kValues[i];
       }
     }
     
     return elbowK;
   };
 
-  const findOptimalDBI = (dbiValues: number[]): number | null => {
-    if (dbiValues.length < 2) return null;
+  const findOptimalDBI = (dbiValues: number[], kValues: number[]): number | null => {
+    if (dbiValues.length < 1) return null;
     
     let minDBI = Infinity;
-    let optimalK = 2;
+    let optimalK = kValues[0];
     
-    for (let i = 1; i < dbiValues.length; i++) {
+    for (let i = 0; i < dbiValues.length; i++) {
       if (dbiValues[i] > 0 && dbiValues[i] < minDBI) {
         minDBI = dbiValues[i];
-        optimalK = i + 1;
+        optimalK = kValues[i];
       }
     }
     
@@ -399,6 +414,7 @@ function App() {
     setNumericalData(null);
     setNormalizedData(null);
     setExperimentResults([]);
+    setCurrentExperiments([]);
     setElbowData(null);
     setActiveStep(1);
     setShowAbout(true);
@@ -797,7 +813,7 @@ function App() {
                         <div>
                           <h3 className="text-lg font-medium text-gray-800">Analisis Lanjutan</h3>
                           <p className="text-sm text-gray-600 mt-1">
-                            Gunakan Elbow Method untuk menentukan jumlah cluster optimal berdasarkan WCSS dan Davies-Bouldin Index
+                            Gunakan Elbow Method untuk menentukan jumlah cluster optimal berdasarkan nilai K dari eksperimen yang telah dilakukan: [{currentExperiments.map(exp => exp.k).sort((a, b) => a - b).join(', ')}]
                           </p>
                         </div>
                         <button
@@ -820,6 +836,7 @@ function App() {
                   <ElbowAnalysis
                     wcssValues={elbowData.wcss}
                     dbiValues={elbowData.dbi}
+                    kValues={elbowData.kValues}
                     onBack={() => setActiveStep(5)}
                     onReset={handleReset}
                   />
@@ -843,7 +860,7 @@ function App() {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <BarChart3 size={16} />
-                        <span>Menjalankan clustering untuk berbagai nilai K (1 hingga {Math.min(10, Math.floor(normalizedData?.data.length || 0 / 3))})...</span>
+                        <span>Menjalankan clustering untuk nilai K dari eksperimen: [{currentExperiments.map(exp => exp.k).sort((a, b) => a - b).join(', ')}]...</span>
                       </div>
                       
                       <div className="bg-white p-4 rounded border border-teal-100">
@@ -851,7 +868,7 @@ function App() {
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
-                            <span>Menghitung WCSS untuk setiap nilai K</span>
+                            <span>Menghitung WCSS untuk setiap nilai K dari eksperimen</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>

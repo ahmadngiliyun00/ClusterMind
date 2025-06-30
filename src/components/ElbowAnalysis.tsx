@@ -5,14 +5,24 @@ import { ArrowLeft, RefreshCw, TrendingDown } from 'lucide-react';
 interface ElbowAnalysisProps {
   wcssValues: number[];
   dbiValues: number[];
+  kValues?: number[]; // NEW: Optional K values array
   onBack: () => void;
   onReset: () => void;
 }
 
-const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, onBack, onReset }) => {
+const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ 
+  wcssValues, 
+  dbiValues, 
+  kValues, 
+  onBack, 
+  onReset 
+}) => {
+  // Use provided K values or generate sequential values (backward compatibility)
+  const actualKValues = kValues || Array.from({ length: wcssValues.length }, (_, i) => i + 1);
+  
   // Prepare data for the charts
   const chartData = wcssValues.map((wcss, index) => ({
-    k: index + 1,
+    k: actualKValues[index],
     wcss: wcss,
     dbi: dbiValues[index] || 0,
     'WCSS': wcss,
@@ -20,11 +30,11 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
   }));
 
   // Calculate elbow point for WCSS (simplified method)
-  const calculateElbowPoint = (values: number[]) => {
+  const calculateElbowPoint = (values: number[], kVals: number[]) => {
     if (values.length < 3) return null;
     
     let maxDiff = 0;
-    let elbowK = 2;
+    let elbowK = kVals[1]; // Start from second K value
     
     for (let i = 1; i < values.length - 1; i++) {
       const diff1 = values[i - 1] - values[i];
@@ -33,7 +43,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
       
       if (totalDiff > maxDiff) {
         maxDiff = totalDiff;
-        elbowK = i + 1;
+        elbowK = kVals[i];
       }
     }
     
@@ -41,25 +51,24 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
   };
 
   // Find optimal K for DBI (minimum value)
-  const findOptimalDBI = (values: number[]) => {
-    if (values.length < 2) return null;
+  const findOptimalDBI = (values: number[], kVals: number[]) => {
+    if (values.length < 1) return null;
     
     let minDBI = Infinity;
-    let optimalK = 2;
+    let optimalK = kVals[0];
     
-    // Start from k=2 since DBI is undefined for k=1
-    for (let i = 1; i < values.length; i++) {
+    for (let i = 0; i < values.length; i++) {
       if (values[i] > 0 && values[i] < minDBI) {
         minDBI = values[i];
-        optimalK = i + 1;
+        optimalK = kVals[i];
       }
     }
     
     return optimalK;
   };
 
-  const suggestedWCSSK = calculateElbowPoint(wcssValues);
-  const suggestedDBIK = findOptimalDBI(dbiValues);
+  const suggestedWCSSK = calculateElbowPoint(wcssValues, actualKValues);
+  const suggestedDBIK = findOptimalDBI(dbiValues, actualKValues);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -71,7 +80,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
           <div>
             <h2 className="text-xl font-semibold text-gray-800">Analisis Metode Elbow</h2>
             <p className="text-gray-600 text-sm">
-              Menentukan jumlah cluster optimal berdasarkan WCSS dan Davies-Bouldin Index
+              Menentukan jumlah cluster optimal berdasarkan nilai K dari eksperimen: [{actualKValues.join(', ')}]
             </p>
           </div>
         </div>
@@ -155,6 +164,8 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                     position: 'insideBottom',
                     offset: -10
                   }}
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
                 />
                 <YAxis 
                   label={{
@@ -188,7 +199,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={chartData.slice(1)} // Skip k=1 since DBI is undefined
+                data={chartData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
               >
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
@@ -199,6 +210,8 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                     position: 'insideBottom',
                     offset: -10
                   }}
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
                 />
                 <YAxis 
                   label={{
@@ -264,7 +277,7 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
                       {row.wcss.toFixed(3)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {row.k === 1 ? '-' : row.dbi.toFixed(3)}
+                      {row.dbi.toFixed(3)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex gap-2">
@@ -308,6 +321,12 @@ const ElbowAnalysis: React.FC<ElbowAnalysisProps> = ({ wcssValues, dbiValues, on
               <li>• Nilai minimum menunjukkan K optimal</li>
             </ul>
           </div>
+        </div>
+        
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>📊 Analisis berdasarkan eksperimen:</strong> Grafik dan tabel menampilkan hasil untuk nilai K yang telah diuji dalam eksperimen clustering: [{actualKValues.join(', ')}]
+          </p>
         </div>
       </div>
     </div>
