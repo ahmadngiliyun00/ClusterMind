@@ -227,7 +227,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Menghitung metrik evaluasi (WCSS & Davies-Bouldin Index)</span>
+                  <span>Menghitung metrik evaluasi (WCSS & DBI)</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
