@@ -42,6 +42,7 @@ function App() {
   const [showAbout, setShowAbout] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [isElbowLoading, setIsElbowLoading] = useState(false); // NEW: Separate loading state for elbow
   
   // Handle file upload
   const handleFileUpload = async (file: File, separator?: string) => {
@@ -253,7 +254,7 @@ function App() {
     }
     
     try {
-      setIsLoading(true);
+      setIsElbowLoading(true); // Use separate loading state
       setLoadingProgress('Memulai analisis Elbow Method...');
       
       // Get K values from current experiments
@@ -314,13 +315,13 @@ function App() {
         dbi: elbowResult.dbi,
         kValues: kValues
       });
-      setActiveStep(6); // Move to step 6 for elbow analysis
+      // DON'T change activeStep - keep it at 5 so results remain visible
       
     } catch (error) {
       console.error('❌ ELBOW ANALYSIS FAILED:', error);
       alert('Terjadi kesalahan saat melakukan analisis elbow: ' + (error as Error).message);
     } finally {
-      setIsLoading(false);
+      setIsElbowLoading(false); // Use separate loading state
       setLoadingProgress('');
     }
   };
@@ -420,6 +421,7 @@ function App() {
     setShowAbout(true);
     setActiveTab(0);
     setIsLoading(false);
+    setIsElbowLoading(false);
     setLoadingProgress('');
     setCurrentExperiment(0);
     setTotalExperiments(0);
@@ -813,7 +815,7 @@ function App() {
                         <button
                           className="flex items-center justify-center gap-2 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                           onClick={runElbowMethod}
-                          disabled={isLoading}
+                          disabled={isElbowLoading}
                         >
                           <BarChart3 size={20} />
                           <span>Analisis Elbow</span>
@@ -824,21 +826,8 @@ function App() {
                 </section>
               )}
 
-              {/* Step 6: Elbow Analysis - ONLY SHOW WHEN HAVE ELBOW DATA AND NOT LOADING */}
-              {activeStep >= 6 && elbowData && !isLoading && (
-                <section>
-                  <ElbowAnalysis
-                    wcssValues={elbowData.wcss}
-                    dbiValues={elbowData.dbi}
-                    kValues={elbowData.kValues}
-                    onBack={() => setActiveStep(5)}
-                    onReset={handleReset}
-                  />
-                </section>
-              )}
-
-              {/* Loading State for Elbow Analysis */}
-              {activeStep >= 6 && isLoading && loadingProgress.includes('Elbow') && (
+              {/* Loading State for Elbow Analysis - SHOW BELOW CLUSTERING RESULTS */}
+              {isElbowLoading && experimentResults.length > 0 && (
                 <section>
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center gap-3 mb-4">
@@ -894,6 +883,19 @@ function App() {
                       </div>
                     </div>
                   </div>
+                </section>
+              )}
+
+              {/* Elbow Analysis Results - SHOW BELOW CLUSTERING RESULTS */}
+              {elbowData && !isElbowLoading && experimentResults.length > 0 && (
+                <section>
+                  <ElbowAnalysis
+                    wcssValues={elbowData.wcss}
+                    dbiValues={elbowData.dbi}
+                    kValues={elbowData.kValues}
+                    onBack={() => setElbowData(null)} // Clear elbow data instead of changing step
+                    onReset={handleReset}
+                  />
                 </section>
               )}
             </div>
