@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Play, BarChart3, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Play, BarChart3, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface ClusterExperiment {
   id: string;
@@ -11,6 +11,9 @@ interface ClusterExperimentsProps {
   onRunExperiments: (experiments: ClusterExperiment[]) => void;
   onRunElbowMethod: () => void;
   isLoading: boolean;
+  loadingProgress?: string;
+  currentExperiment?: number;
+  totalExperiments?: number;
   maxK: number;
   showElbowButton?: boolean;
 }
@@ -19,6 +22,9 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   onRunExperiments,
   onRunElbowMethod,
   isLoading,
+  loadingProgress = '',
+  currentExperiment = 0,
+  totalExperiments = 0,
   maxK = 10,
   showElbowButton = false
 }) => {
@@ -57,7 +63,7 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
   };
 
   const handleRunExperiments = () => {
-    console.log('\n🚀 STARTING CLUSTERING EXPERIMENTS');
+    console.log('\n🚀 USER INITIATED CLUSTERING EXPERIMENTS');
     console.log('='.repeat(50));
     console.log(`Total experiments: ${experiments.length}`);
     console.log('Experiments to run:', experiments.map(exp => `${exp.name} (K=${exp.k})`).join(', '));
@@ -173,13 +179,34 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
         </div>
       </div>
 
-      {/* Loading State with Progress */}
+      {/* Enhanced Loading State with Detailed Progress */}
       {isLoading && (
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+        <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-            <h3 className="text-lg font-medium text-gray-800">Memproses Eksperimen Clustering</h3>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Memproses Eksperimen Clustering</h3>
+              {loadingProgress && (
+                <p className="text-sm text-gray-600">{loadingProgress}</p>
+              )}
+            </div>
           </div>
+          
+          {/* Progress Bar */}
+          {totalExperiments > 0 && (
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-600 mb-1">
+                <span>Progress Eksperimen</span>
+                <span>{currentExperiment}/{totalExperiments}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${(currentExperiment / totalExperiments) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
           
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -187,28 +214,40 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
               <span>Sedang menjalankan algoritma K-Means untuk setiap nilai K...</span>
             </div>
             
-            <div className="bg-white p-3 rounded border">
-              <p className="text-sm font-medium text-gray-700 mb-2">Progress:</p>
+            <div className="bg-white p-4 rounded border border-blue-100">
+              <p className="text-sm font-medium text-gray-700 mb-3">Tahapan Proses:</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Ekstraksi fitur numerik dari data</span>
+                  <span>Ekstraksi fitur numerik dari data yang telah dinormalisasi</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Menjalankan K-Means untuk setiap eksperimen</span>
+                  <span>Menjalankan K-Means clustering dengan multiple attempts</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Menghitung metrik evaluasi (WCSS & DBI)</span>
+                  <span>Menghitung metrik evaluasi (WCSS & Davies-Bouldin Index)</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Validasi hasil clustering dan assignment data points</span>
                 </div>
               </div>
             </div>
             
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-              <p className="text-sm text-yellow-800">
-                <strong>💡 Tip:</strong> Buka Developer Console (F12) untuk melihat detail perhitungan setiap eksperimen
-              </p>
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-yellow-800 font-medium">
+                    💡 Tip: Buka Developer Console (F12) untuk melihat detail perhitungan
+                  </p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    Console akan menampilkan log detail untuk setiap eksperimen termasuk nilai WCSS dan DBI
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

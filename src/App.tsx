@@ -33,6 +33,9 @@ function App() {
   const [normalizedData, setNormalizedData] = useState<ParsedData | null>(null);
   const [experimentResults, setExperimentResults] = useState<ExperimentResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState<string>('');
+  const [currentExperiment, setCurrentExperiment] = useState<number>(0);
+  const [totalExperiments, setTotalExperiments] = useState<number>(0);
   const [elbowData, setElbowData] = useState<{ wcss: number[]; dbi: number[] } | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [showAbout, setShowAbout] = useState(true);
@@ -97,45 +100,54 @@ function App() {
   // Add delay function for better UX
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Run clustering experiments with proper progress
+  // Run clustering experiments with proper progress and logging
   const runClusteringExperiments = async (experiments: ClusterExperiment[]) => {
     if (!normalizedData) return;
     
     try {
       setIsLoading(true);
-      setExperimentResults([]); // Clear previous results
+      setExperimentResults([]); // Clear previous results immediately
+      setCurrentExperiment(0);
+      setTotalExperiments(experiments.length);
+      setLoadingProgress('Memulai eksperimen clustering...');
       
-      console.log('\n🔬 STARTING CLUSTERING EXPERIMENTS');
-      console.log('='.repeat(60));
-      console.log(`Dataset: ${normalizedData.data.length} rows x ${normalizedData.numericalColumns.length} features`);
-      console.log(`Features: [${normalizedData.numericalColumns.join(', ')}]`);
-      console.log(`Total experiments: ${experiments.length}`);
-      console.log('='.repeat(60));
+      // Clear console and start logging
+      console.clear();
+      console.log('\n🔬 CLUSTERING EXPERIMENTS STARTED');
+      console.log('='.repeat(80));
+      console.log(`📊 Dataset: ${normalizedData.data.length} rows × ${normalizedData.numericalColumns.length} features`);
+      console.log(`🔢 Features: [${normalizedData.numericalColumns.join(', ')}]`);
+      console.log(`🧪 Total experiments: ${experiments.length}`);
+      console.log(`📋 Experiments: ${experiments.map(exp => `${exp.name}(K=${exp.k})`).join(', ')}`);
+      console.log('='.repeat(80));
       
       const results: ExperimentResult[] = [];
       
       for (let i = 0; i < experiments.length; i++) {
         const experiment = experiments[i];
+        setCurrentExperiment(i + 1);
+        setLoadingProgress(`Eksperimen ${i + 1}/${experiments.length}: ${experiment.name} (K=${experiment.k})`);
         
-        console.log(`\n📊 EXPERIMENT ${i + 1}/${experiments.length}: ${experiment.name}`);
-        console.log('-'.repeat(40));
-        console.log(`K = ${experiment.k}`);
-        console.log(`Starting clustering process...`);
+        console.log(`\n🔬 EXPERIMENT ${i + 1}/${experiments.length}: ${experiment.name}`);
+        console.log('─'.repeat(60));
+        console.log(`📈 K = ${experiment.k}`);
+        console.log(`⏱️  Starting clustering process...`);
         
         try {
           // Add delay to show progress
-          await delay(500);
+          await delay(800);
           
-          const startTime = Date.now();
+          const startTime = performance.now();
           
+          console.log(`🔄 Running K-Means clustering...`);
           const result = await performKMeansClustering(
             normalizedData.data,
             normalizedData.numericalColumns,
             experiment.k
           );
           
-          const endTime = Date.now();
-          const duration = endTime - startTime;
+          const endTime = performance.now();
+          const duration = Math.round(endTime - startTime);
           
           const experimentResult: ExperimentResult = {
             ...result,
@@ -147,48 +159,85 @@ function App() {
           
           results.push(experimentResult);
           
+          // Log detailed results
           console.log(`✅ EXPERIMENT ${i + 1} COMPLETED`);
-          console.log(`Duration: ${duration}ms`);
-          console.log(`K=${experiment.k}: WCSS=${result.wcss?.toFixed(3)}, DBI=${result.daviesBouldinIndex?.toFixed(3)}`);
-          console.log(`Cluster sizes: [${result.clusterSizes.join(', ')}]`);
-          console.log('-'.repeat(40));
+          console.log(`⏱️  Duration: ${duration}ms`);
+          console.log(`📊 Results:`);
+          console.log(`   • K = ${experiment.k}`);
+          console.log(`   • WCSS = ${result.wcss?.toFixed(4) || 'N/A'}`);
+          console.log(`   • Davies-Bouldin Index = ${result.daviesBouldinIndex?.toFixed(4) || 'N/A'}`);
+          console.log(`   • Cluster sizes: [${result.clusterSizes.join(', ')}]`);
+          console.log(`   • Total data points: ${result.data.length}`);
           
-          // Update results incrementally for better UX
-          setExperimentResults([...results]);
+          // Validate results
+          if (result.wcss === undefined || result.daviesBouldinIndex === undefined) {
+            console.warn(`⚠️  Warning: Some metrics are undefined for experiment ${i + 1}`);
+          }
+          
+          console.log('─'.repeat(60));
           
           // Add delay between experiments
           if (i < experiments.length - 1) {
-            await delay(300);
+            await delay(500);
           }
           
         } catch (error) {
           console.error(`❌ EXPERIMENT ${i + 1} FAILED:`, error);
-          console.log(`Skipping ${experiment.name} due to error`);
+          console.log(`🚫 Skipping ${experiment.name} due to error: ${(error as Error).message}`);
+          console.log('─'.repeat(60));
           // Continue with other experiments
         }
       }
       
+      // Final summary
+      console.log('\n🎉 ALL EXPERIMENTS COMPLETED');
+      console.log('='.repeat(80));
+      console.log('📋 SUMMARY REPORT:');
+      console.log('─'.repeat(40));
+      
+      if (results.length > 0) {
+        console.log('| Exp | K | WCSS      | DBI      | Status |');
+        console.log('|-----|---|-----------|----------|--------|');
+        results.forEach((result, i) => {
+          const wcss = result.wcss?.toFixed(3) || 'N/A';
+          const dbi = result.daviesBouldinIndex?.toFixed(3) || 'N/A';
+          console.log(`| ${(i + 1).toString().padStart(3)} | ${result.k} | ${wcss.padStart(9)} | ${dbi.padStart(8)} | ✅ OK  |`);
+        });
+        
+        // Find best results
+        const validResults = results.filter(r => r.wcss !== undefined && r.daviesBouldinIndex !== undefined);
+        if (validResults.length > 0) {
+          const bestWCSS = validResults.reduce((min, r) => r.wcss < min.wcss ? r : min);
+          const bestDBI = validResults.reduce((min, r) => r.daviesBouldinIndex < min.daviesBouldinIndex ? r : min);
+          
+          console.log('\n🏆 BEST RESULTS:');
+          console.log(`   • Lowest WCSS: ${bestWCSS.experimentName} (K=${bestWCSS.k}, WCSS=${bestWCSS.wcss.toFixed(4)})`);
+          console.log(`   • Lowest DBI: ${bestDBI.experimentName} (K=${bestDBI.k}, DBI=${bestDBI.daviesBouldinIndex.toFixed(4)})`);
+        }
+      } else {
+        console.log('❌ No experiments completed successfully');
+      }
+      
+      console.log('='.repeat(80));
+      console.log('💡 Tip: Lower WCSS and DBI values indicate better clustering quality');
+      console.log('📈 Use "Analisis Elbow" to find optimal K value');
+      
       if (results.length === 0) {
         throw new Error('Tidak ada eksperimen yang berhasil dijalankan');
       }
-      
-      console.log('\n🎉 ALL EXPERIMENTS COMPLETED');
-      console.log('='.repeat(60));
-      console.log('SUMMARY:');
-      results.forEach((result, i) => {
-        console.log(`${i + 1}. ${result.experimentName}: K=${result.k}, WCSS=${result.wcss.toFixed(3)}, DBI=${result.daviesBouldinIndex.toFixed(3)}`);
-      });
-      console.log('='.repeat(60));
       
       setExperimentResults(results);
       setActiveStep(5);
       setActiveTab(0); // Reset to first tab
       
     } catch (error) {
-      console.error('Error performing clustering experiments:', error);
+      console.error('❌ CLUSTERING EXPERIMENTS FAILED:', error);
       alert('Terjadi kesalahan saat melakukan eksperimen clustering: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
+      setLoadingProgress('');
+      setCurrentExperiment(0);
+      setTotalExperiments(0);
     }
   };
 
@@ -198,9 +247,10 @@ function App() {
     
     try {
       setIsLoading(true);
+      setLoadingProgress('Menjalankan analisis Elbow Method...');
       
-      console.log('\n📈 STARTING ELBOW METHOD ANALYSIS');
-      console.log('='.repeat(50));
+      console.log('\n📈 ELBOW METHOD ANALYSIS STARTED');
+      console.log('='.repeat(60));
       
       const elbowResult = await calculateElbowMethod(
         normalizedData.data,
@@ -208,7 +258,7 @@ function App() {
       );
       
       console.log('\n✅ ELBOW ANALYSIS COMPLETED');
-      console.log('='.repeat(50));
+      console.log('='.repeat(60));
       
       setElbowData(elbowResult);
       setActiveStep(6);
@@ -217,6 +267,7 @@ function App() {
       alert('Terjadi kesalahan saat menghitung metode elbow: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
+      setLoadingProgress('');
     }
   };
 
@@ -275,6 +326,10 @@ function App() {
     setActiveStep(1);
     setShowAbout(true);
     setActiveTab(0);
+    setIsLoading(false);
+    setLoadingProgress('');
+    setCurrentExperiment(0);
+    setTotalExperiments(0);
   };
 
   return (
@@ -578,14 +633,17 @@ function App() {
                     onRunExperiments={runClusteringExperiments}
                     onRunElbowMethod={runElbowMethod}
                     isLoading={isLoading}
+                    loadingProgress={loadingProgress}
+                    currentExperiment={currentExperiment}
+                    totalExperiments={totalExperiments}
                     maxK={Math.min(10, Math.floor(normalizedData.data.length / 3))}
                     showElbowButton={experimentResults.length > 0}
                   />
                 </section>
               )}
 
-              {/* Results with Tabs */}
-              {experimentResults.length > 0 && (
+              {/* Results with Tabs - ONLY SHOW WHEN NOT LOADING */}
+              {experimentResults.length > 0 && !isLoading && (
                 <section className="space-y-6">
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-semibold mb-6 text-gray-800">Hasil Eksperimen Clustering</h2>
