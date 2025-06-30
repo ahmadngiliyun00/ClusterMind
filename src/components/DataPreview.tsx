@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Database, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Database, ArrowRight, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { DataPoint } from '../utils/csv';
 
 interface DataPreviewProps {
@@ -53,6 +53,23 @@ const DataPreview: React.FC<DataPreviewProps> = ({
     }
   };
 
+  // Analyze cardinality for categorical columns
+  const analyzeCardinality = () => {
+    const cardinalityInfo: { [column: string]: { count: number; isHighCardinality: boolean } } = {};
+    
+    categoricalColumns.forEach(column => {
+      const uniqueValues = new Set(data.map(row => String(row[column] || '')));
+      const count = uniqueValues.size;
+      const isHighCardinality = count > 10; // Threshold for high cardinality
+      cardinalityInfo[column] = { count, isHighCardinality };
+    });
+    
+    return cardinalityInfo;
+  };
+
+  const cardinalityInfo = analyzeCardinality();
+  const hasHighCardinalityColumns = Object.values(cardinalityInfo).some(info => info.isHighCardinality);
+
   // Determine normalization method based on title
   const isNormalizationStep = title.includes('normalisasi') || title.includes('Normalisasi');
   const normalizationMethod = isNormalizationStep ? 'Min-Max (0-1)' : '';
@@ -66,6 +83,50 @@ const DataPreview: React.FC<DataPreviewProps> = ({
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
           <p className="text-gray-600 text-sm mt-1">{description}</p>
+          
+          {/* Cardinality Warning for Categorical Data */}
+          {categoricalColumns.length > 0 && hasHighCardinalityColumns && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-yellow-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-yellow-800 text-sm">Peringatan Cardinality Tinggi</h4>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    Beberapa kolom kategorikal memiliki banyak nilai unik yang dapat membuat clustering tidak efektif:
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(cardinalityInfo)
+                      .filter(([_, info]) => info.isHighCardinality)
+                      .map(([column, info]) => (
+                        <div key={column} className="text-xs text-yellow-700">
+                          • <strong>{column}</strong>: {info.count} nilai unik
+                        </div>
+                      ))
+                    }
+                  </div>
+                  <p className="text-xs text-yellow-700 mt-2">
+                    Smart One-Hot Encoding akan memfilter kolom dengan cardinality tinggi secara otomatis.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Good Cardinality Info */}
+          {categoricalColumns.length > 0 && !hasHighCardinalityColumns && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-start gap-2">
+                <CheckCircle size={16} className="text-green-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-green-800 text-sm">Data Cocok untuk Clustering</h4>
+                  <p className="text-xs text-green-700 mt-1">
+                    Semua kolom kategorikal memiliki cardinality yang sesuai untuk clustering (≤10 nilai unik).
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {isNormalizationStep && (
             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-sm text-blue-800">
@@ -117,11 +178,23 @@ const DataPreview: React.FC<DataPreviewProps> = ({
               <div>
                 <h4 className="text-sm font-medium text-green-700 mb-2">Kolom Kategorikal ({categoricalColumns.length})</h4>
                 <div className="flex flex-wrap gap-1">
-                  {categoricalColumns.map(col => (
-                    <span key={col} className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
-                      {col}
-                    </span>
-                  ))}
+                  {categoricalColumns.map(col => {
+                    const info = cardinalityInfo[col];
+                    const isHighCardinality = info?.isHighCardinality || false;
+                    return (
+                      <span 
+                        key={col} 
+                        className={`px-2 py-1 text-xs rounded ${
+                          isHighCardinality 
+                            ? 'bg-yellow-100 text-yellow-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}
+                        title={info ? `${info.count} nilai unik` : ''}
+                      >
+                        {col} {info && `(${info.count})`}
+                      </span>
+                    );
+                  })}
                   {categoricalColumns.length === 0 && (
                     <span className="text-xs text-gray-500 italic">Tidak ada kolom kategorikal</span>
                   )}

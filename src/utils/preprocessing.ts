@@ -15,6 +15,16 @@ export interface ColumnStats {
   max?: number;
 }
 
+// Interface untuk validasi data clustering
+export interface DataValidationResult {
+  isValid: boolean;
+  warnings: string[];
+  recommendations: string[];
+  cardinalityInfo: { [column: string]: number };
+  totalFeatures: number;
+  sparsityRatio: number;
+}
+
 /**
  * Identify column types from data
  */
@@ -58,8 +68,182 @@ export function identifyColumnTypes(data: DataPoint[]): {
 }
 
 /**
- * One-Hot Encoding untuk data kategorikal
- * Mengubah setiap nilai kategori menjadi kolom biner (0 atau 1)
+ * Analyze cardinality and clustering suitability of categorical columns
+ */
+export function analyzeDataForClustering(data: DataPoint[], categoricalColumns: string[]): DataValidationResult {
+  console.log('\n🔍 ANALYZING DATA SUITABILITY FOR CLUSTERING');
+  console.log('='.repeat(60));
+  
+  const cardinalityInfo: { [column: string]: number } = {};
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+  let totalPotentialFeatures = 0;
+  
+  // Analyze each categorical column
+  categoricalColumns.forEach(column => {
+    const uniqueValues = new Set(data.map(row => String(row[column] || '')));
+    const cardinality = uniqueValues.size;
+    cardinalityInfo[column] = cardinality;
+    totalPotentialFeatures += cardinality;
+    
+    console.log(`📊 Column "${column}": ${cardinality} unique values`);
+    
+    // High cardinality warning
+    if (cardinality > 50) {
+      warnings.push(`Kolom "${column}" memiliki ${cardinality} nilai unik (sangat tinggi)`);
+      recommendations.push(`Pertimbangkan untuk menghapus atau mengelompokkan kolom "${column}"`);
+    } else if (cardinality > 20) {
+      warnings.push(`Kolom "${column}" memiliki ${cardinality} nilai unik (tinggi)`);
+    }
+    
+    // Near-unique data warning
+    const uniquenessRatio = cardinality / data.length;
+    if (uniquenessRatio > 0.8) {
+      warnings.push(`Kolom "${column}" hampir unik (${(uniquenessRatio * 100).toFixed(1)}% dari data)`);
+      recommendations.push(`Kolom "${column}" tidak cocok untuk clustering karena terlalu unik`);
+    }
+  });
+  
+  // Calculate sparsity ratio
+  const sparsityRatio = totalPotentialFeatures / data.length;
+  
+  console.log(`\n📈 CLUSTERING SUITABILITY ANALYSIS:`);
+  console.log(`   Total potential features after One-Hot: ${totalPotentialFeatures}`);
+  console.log(`   Data rows: ${data.length}`);
+  console.log(`   Sparsity ratio: ${sparsityRatio.toFixed(2)} (features/rows)`);
+  
+  // Overall assessment
+  let isValid = true;
+  
+  if (sparsityRatio > 5) {
+    isValid = false;
+    warnings.push(`Data akan menjadi sangat sparse (${sparsityRatio.toFixed(1)} fitur per baris)`);
+    recommendations.push('Kurangi jumlah kolom kategorikal atau gunakan teknik dimensionality reduction');
+  }
+  
+  if (totalPotentialFeatures > 1000) {
+    isValid = false;
+    warnings.push(`Terlalu banyak fitur setelah One-Hot Encoding (${totalPotentialFeatures})`);
+    recommendations.push('Pilih hanya kolom dengan cardinality rendah untuk clustering');
+  }
+  
+  // Specific recommendations
+  if (warnings.length > 0) {
+    recommendations.push('Gunakan hanya kolom dengan sedikit kategori (seperti: prodi, kelamin, jalur, status)');
+    recommendations.push('Hindari kolom dengan banyak nilai unik (seperti: sekolah, kelurahan, kecamatan)');
+  }
+  
+  console.log(`\n${isValid ? '✅' : '❌'} Overall assessment: ${isValid ? 'SUITABLE' : 'NOT SUITABLE'} for clustering`);
+  
+  return {
+    isValid,
+    warnings,
+    recommendations,
+    cardinalityInfo,
+    totalFeatures: totalPotentialFeatures,
+    sparsityRatio
+  };
+}
+
+/**
+ * Filter columns based on cardinality for better clustering
+ */
+export function filterColumnsForClustering(
+  data: DataPoint[], 
+  categoricalColumns: string[], 
+  maxCardinality: number = 10
+): {
+  suitableColumns: string[];
+  excludedColumns: string[];
+  cardinalityInfo: { [column: string]: number };
+} {
+  console.log('\n🔧 FILTERING COLUMNS FOR CLUSTERING');
+  console.log(`Max cardinality threshold: ${maxCardinality}`);
+  console.log('='.repeat(50));
+  
+  const suitableColumns: string[] = [];
+  const excludedColumns: string[] = [];
+  const cardinalityInfo: { [column: string]: number } = {};
+  
+  categoricalColumns.forEach(column => {
+    const uniqueValues = new Set(data.map(row => String(row[column] || '')));
+    const cardinality = uniqueValues.size;
+    cardinalityInfo[column] = cardinality;
+    
+    if (cardinality <= maxCardinality) {
+      suitableColumns.push(column);
+      console.log(`✅ "${column}": ${cardinality} values - INCLUDED`);
+    } else {
+      excludedColumns.push(column);
+      console.log(`❌ "${column}": ${cardinality} values - EXCLUDED (too high cardinality)`);
+    }
+  });
+  
+  console.log(`\nFiltering result:`);
+  console.log(`  Suitable columns: ${suitableColumns.length}`);
+  console.log(`  Excluded columns: ${excludedColumns.length}`);
+  
+  return { suitableColumns, excludedColumns, cardinalityInfo };
+}
+
+/**
+ * Smart One-Hot Encoding with cardinality filtering
+ */
+export function smartOneHotEncoding(
+  data: DataPoint[], 
+  categoricalColumns: string[],
+  maxCardinality: number = 10
+): {
+  encodedData: DataPoint[];
+  encodingMaps: EncodingMap;
+  newColumns: string[];
+  excludedColumns: string[];
+  validationResult: DataValidationResult;
+} {
+  console.log('\n🧠 SMART ONE-HOT ENCODING');
+  console.log('='.repeat(50));
+  
+  // First, analyze data suitability
+  const validationResult = analyzeDataForClustering(data, categoricalColumns);
+  
+  // Filter columns based on cardinality
+  const { suitableColumns, excludedColumns } = filterColumnsForClustering(
+    data, 
+    categoricalColumns, 
+    maxCardinality
+  );
+  
+  if (suitableColumns.length === 0) {
+    console.log('⚠️  No suitable categorical columns found for clustering');
+    return {
+      encodedData: data.map(row => ({ ...row })),
+      encodingMaps: {},
+      newColumns: [],
+      excludedColumns,
+      validationResult
+    };
+  }
+  
+  // Perform One-Hot Encoding only on suitable columns
+  const { encodedData, encodingMaps, newColumns } = oneHotEncoding(data, suitableColumns);
+  
+  // Remove excluded categorical columns from the data
+  excludedColumns.forEach(column => {
+    encodedData.forEach(row => {
+      delete row[column];
+    });
+  });
+  
+  console.log(`\n✅ Smart One-Hot Encoding completed:`);
+  console.log(`   Processed columns: ${suitableColumns.length}`);
+  console.log(`   Excluded columns: ${excludedColumns.length}`);
+  console.log(`   New binary features: ${newColumns.length}`);
+  
+  return { encodedData, encodingMaps, newColumns, excludedColumns, validationResult };
+}
+
+/**
+ * One-Hot Encoding untuk data kategorikal (original function)
  */
 export function oneHotEncoding(data: DataPoint[], categoricalColumns: string[]): {
   encodedData: DataPoint[];
@@ -121,7 +305,6 @@ export function oneHotEncoding(data: DataPoint[], categoricalColumns: string[]):
 
 /**
  * Label Encoding untuk data kategorikal (metode lama)
- * Mengubah setiap nilai kategori menjadi angka berurutan
  */
 export function labelEncoding(data: DataPoint[], categoricalColumns: string[]): {
   encodedData: DataPoint[];
@@ -152,7 +335,6 @@ export function labelEncoding(data: DataPoint[], categoricalColumns: string[]): 
 
 /**
  * Normalisasi data numerik menggunakan Min-Max scaling (0-1 normalization)
- * Formula: (x - min) / (max - min)
  */
 export function minMaxNormalization(
   data: DataPoint[],
@@ -210,135 +392,12 @@ export function minMaxNormalization(
 }
 
 /**
- * Normalisasi data numerik menggunakan Z-score transformation (standardization)
- * Formula: (x - mean) / std
+ * Perform smart One-Hot Encoding with validation and filtering
  */
-export function zScoreNormalization(
-  data: DataPoint[],
-  numericalColumns: string[]
-): {
-  normalizedData: DataPoint[];
-  columnStats: { [key: string]: ColumnStats };
-} {
-  const columnStats: { [key: string]: ColumnStats } = {};
-  const normalizedData = data.map(row => ({ ...row })); // Deep copy
-
-  console.log('=== Z-SCORE NORMALIZATION ===');
-  console.log(`Normalizing ${numericalColumns.length} columns:`, numericalColumns);
-
-  numericalColumns.forEach(column => {
-    // Hitung mean dan standard deviation
-    const values = data.map(row => Number(row[column]) || 0).filter(val => isFinite(val));
-    
-    if (values.length === 0) {
-      columnStats[column] = { mean: 0, std: 1, min: 0, max: 1 };
-      return;
-    }
-    
-    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-    const std = Math.sqrt(variance);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    
-    columnStats[column] = { mean, std, min, max };
-    
-    console.log(`Column ${column}: mean=${mean.toFixed(3)}, std=${std.toFixed(3)}`);
-
-    // Z-score normalization: (x - mean) / std
-    normalizedData.forEach(row => {
-      const value = Number(row[column]) || 0;
-      if (std === 0) {
-        row[column] = 0; // Jika std = 0, semua nilai sama
-      } else {
-        row[column] = (value - mean) / std;
-      }
-    });
-  });
-
-  return { normalizedData, columnStats };
-}
-
-/**
- * Fungsi utama untuk melakukan pra-pemrosesan data dengan One-Hot Encoding
- */
-export function preprocessDataWithOneHot(data: DataPoint[]): {
-  processedData: DataPoint[];
-  encodingMaps: EncodingMap;
-  columnStats: { [key: string]: ColumnStats };
-  categoricalColumns: string[];
-  numericalColumns: string[];
-  newBinaryColumns: string[];
-} {
-  console.log('\n🔄 PREPROCESSING WITH ONE-HOT ENCODING');
-  console.log('='.repeat(50));
-  
-  // Identifikasi tipe kolom
-  const { categoricalColumns, numericalColumns } = identifyColumnTypes(data);
-  
-  console.log(`Original data structure:`);
-  console.log(`  Categorical columns: ${categoricalColumns.length}`);
-  console.log(`  Numerical columns: ${numericalColumns.length}`);
-
-  // One-Hot encoding untuk kolom kategorikal
-  const { encodedData, encodingMaps, newColumns } = oneHotEncoding(data, categoricalColumns);
-
-  // Semua kolom sekarang menjadi numerik (binary 0/1 dari one-hot + kolom numerik asli)
-  const allNumericalColumns = [...numericalColumns, ...newColumns];
-  
-  console.log(`After One-Hot Encoding:`);
-  console.log(`  Total numerical columns: ${allNumericalColumns.length}`);
-  console.log(`  Binary columns from One-Hot: ${newColumns.length}`);
-  console.log(`  Original numerical columns: ${numericalColumns.length}`);
-
-  // TIDAK PERLU NORMALISASI karena One-Hot Encoding sudah menghasilkan nilai 0 dan 1
-  // yang sudah dalam skala yang sama
-  console.log('\n✅ SKIPPING NORMALIZATION');
-  console.log('Reason: One-Hot Encoding produces binary values (0,1) - already normalized');
-
-  return {
-    processedData: encodedData,
-    encodingMaps,
-    columnStats: {}, // Kosong karena tidak ada normalisasi
-    categoricalColumns: [], // Tidak ada lagi kolom kategorikal
-    numericalColumns: allNumericalColumns,
-    newBinaryColumns: newColumns
-  };
-}
-
-/**
- * Fungsi utama untuk melakukan pra-pemrosesan data dengan Label Encoding + Min-Max (metode lama)
- */
-export function preprocessData(data: DataPoint[]): {
-  processedData: DataPoint[];
-  encodingMaps: EncodingMap;
-  columnStats: { [key: string]: ColumnStats };
-  categoricalColumns: string[];
-  numericalColumns: string[];
-} {
-  // Identifikasi tipe kolom
-  const { categoricalColumns, numericalColumns } = identifyColumnTypes(data);
-
-  // Label encoding untuk kolom kategorikal
-  const { encodedData, encodingMaps } = labelEncoding(data, categoricalColumns);
-
-  // Min-Max normalization untuk semua kolom numerik (termasuk hasil encoding)
-  const columnsToNormalize = [...numericalColumns, ...categoricalColumns];
-  const { normalizedData, columnStats } = minMaxNormalization(encodedData, columnsToNormalize);
-
-  return {
-    processedData: normalizedData,
-    encodingMaps,
-    columnStats,
-    categoricalColumns,
-    numericalColumns
-  };
-}
-
-/**
- * Perform nominal to numerical conversion with One-Hot Encoding
- */
-export async function performOneHotEncoding(rawData: ParsedData): Promise<ParsedData> {
+export async function performOneHotEncoding(rawData: ParsedData): Promise<ParsedData & { 
+  validationResult?: DataValidationResult;
+  excludedColumns?: string[];
+}> {
   const { categoricalColumns, numericalColumns } = identifyColumnTypes(rawData.data);
   
   if (categoricalColumns.length === 0) {
@@ -350,22 +409,33 @@ export async function performOneHotEncoding(rawData: ParsedData): Promise<Parsed
     };
   }
   
-  // One-Hot encoding untuk kolom kategorikal
-  const { encodedData, encodingMaps, newColumns } = oneHotEncoding(rawData.data, categoricalColumns);
+  // Use smart One-Hot Encoding with cardinality filtering
+  const { 
+    encodedData, 
+    encodingMaps, 
+    newColumns, 
+    excludedColumns, 
+    validationResult 
+  } = smartOneHotEncoding(rawData.data, categoricalColumns, 10); // Max 10 unique values per column
   
-  // Semua kolom sekarang menjadi numerik
+  // Update headers: remove excluded categorical columns, keep numerical, add new binary columns
+  const newHeaders = rawData.headers
+    .filter(h => !excludedColumns.includes(h)) // Remove excluded categorical columns
+    .filter(h => !categoricalColumns.includes(h) || numericalColumns.includes(h)) // Keep only numerical
+    .concat(newColumns); // Add new binary columns
+  
+  // All columns are now numerical
   const allNumericalColumns = [...numericalColumns, ...newColumns];
-  
-  // Update headers untuk menghilangkan kolom kategorikal lama dan menambah kolom baru
-  const newHeaders = rawData.headers.filter(h => !categoricalColumns.includes(h)).concat(newColumns);
   
   return {
     data: encodedData,
     headers: newHeaders,
     numericalColumns: allNumericalColumns,
-    categoricalColumns: [], // Tidak ada lagi kolom kategorikal
+    categoricalColumns: [], // No more categorical columns
     encodingMaps,
-    columnStats: rawData.columnStats
+    columnStats: rawData.columnStats,
+    validationResult,
+    excludedColumns
   };
 }
 
@@ -401,7 +471,7 @@ export async function performNominalToNumerical(rawData: ParsedData): Promise<Pa
 }
 
 /**
- * Perform Min-Max normalization on numerical data (DEFAULT - TIDAK DIGUNAKAN UNTUK ONE-HOT)
+ * Perform Min-Max normalization on numerical data
  */
 export async function performNormalization(numericalData: ParsedData): Promise<ParsedData> {
   console.log('\n=== NORMALIZATION STEP ===');
@@ -425,25 +495,6 @@ export async function performNormalization(numericalData: ParsedData): Promise<P
   console.log('🔄 Data contains non-binary values - applying Min-Max normalization');
   
   const { normalizedData, columnStats } = minMaxNormalization(
-    numericalData.data,
-    numericalData.numericalColumns
-  );
-  
-  return {
-    data: normalizedData,
-    headers: numericalData.headers,
-    numericalColumns: numericalData.numericalColumns,
-    categoricalColumns: numericalData.categoricalColumns,
-    encodingMaps: numericalData.encodingMaps,
-    columnStats
-  };
-}
-
-/**
- * Alternative function for Z-score normalization (if needed)
- */
-export async function performZScoreNormalization(numericalData: ParsedData): Promise<ParsedData> {
-  const { normalizedData, columnStats } = zScoreNormalization(
     numericalData.data,
     numericalData.numericalColumns
   );
