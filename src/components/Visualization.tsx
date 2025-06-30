@@ -4,7 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
 import { DataPoint } from '../utils/csv';
-import { BarChart3, PieChart as PieChartIcon, Scatter as ScatterIcon, TrendingUp } from 'lucide-react';
+import { BarChart3, PieChart as PieChartIcon, ScatterChart as ScatterIcon, TrendingUp } from 'lucide-react';
 
 interface VisualizationProps {
   data: DataPoint[];
