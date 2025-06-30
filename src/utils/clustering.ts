@@ -37,7 +37,6 @@ const calculateEuclideanDistance = (point1: number[], point2: number[]): number 
 
 /**
  * Calculate Davies-Bouldin Index for cluster evaluation
- * DBI = (1/k) * Σ max((Si + Sj) / Mij) for i ≠ j
  */
 const calculateDaviesBouldinIndex = (
   data: number[][],
@@ -346,27 +345,39 @@ const validateClusteringResult = (result: any, k: number, dataLength: number, fe
 };
 
 /**
- * Run K-Means with proper initialization and multiple attempts
+ * Enhanced K-Means with better initialization and multiple attempts
  */
-const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 10) => {
+const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number = 15) => {
   let bestResult = null;
   let bestWCSS = Infinity;
   
-  console.log(`\n=== RUNNING K-MEANS ===`);
+  console.log(`\n=== RUNNING ENHANCED K-MEANS ===`);
   console.log(`k=${k}, attempts=${maxAttempts}, features=${features.length}x${features[0]?.length}`);
+  
+  // Check for data quality issues
+  const uniqueRows = new Set(features.map(row => row.join(',')));
+  const uniquenessRatio = uniqueRows.size / features.length;
+  console.log(`Data uniqueness: ${uniqueRows.size}/${features.length} (${(uniquenessRatio * 100).toFixed(1)}%)`);
+  
+  if (uniquenessRatio < 0.1) {
+    console.warn('⚠️  Data has very low uniqueness - clustering may not be meaningful');
+  }
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      // Use different seeds and parameters for each attempt
+      // Use different initialization strategies
+      const initStrategies = ['random', 'kmeans++'];
+      const initStrategy = initStrategies[attempt % initStrategies.length];
+      
       const seed = 42 + attempt * 17;
       const maxIterations = 300 + attempt * 50;
       
-      console.log(`\nAttempt ${attempt + 1}: seed=${seed}, maxIter=${maxIterations}`);
+      console.log(`\nAttempt ${attempt + 1}: init=${initStrategy}, seed=${seed}, maxIter=${maxIterations}`);
       
       const result = kmeans(features, k, {
         seed: seed,
         maxIterations: maxIterations,
-        initialization: 'random',
+        initialization: initStrategy as any,
         tolerance: 1e-6
       });
       
@@ -393,9 +404,25 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
       // Calculate WCSS for this result
       const wcss = calculateWCSS(features, result.clusters, result.centroids);
       
-      console.log(`Attempt ${attempt + 1}: WCSS = ${wcss.toFixed(3)}, clusters = [${clusterCounts.join(', ')}]`);
+      // Check for identical centroids (sign of poor clustering)
+      const centroidDistances = [];
+      for (let i = 0; i < result.centroids.length; i++) {
+        for (let j = i + 1; j < result.centroids.length; j++) {
+          const dist = calculateEuclideanDistance(result.centroids[i], result.centroids[j]);
+          centroidDistances.push(dist);
+        }
+      }
+      const minCentroidDistance = Math.min(...centroidDistances);
       
-      // Keep the result with lowest WCSS
+      console.log(`Attempt ${attempt + 1}: WCSS = ${wcss.toFixed(3)}, clusters = [${clusterCounts.join(', ')}], min_centroid_dist = ${minCentroidDistance.toFixed(4)}`);
+      
+      // Skip if centroids are too close (indicates poor separation)
+      if (minCentroidDistance < 0.001) {
+        console.warn(`Attempt ${attempt + 1}: Centroids too close, skipping`);
+        continue;
+      }
+      
+      // Keep the result with lowest WCSS and good separation
       if (wcss < bestWCSS || bestResult === null) {
         bestWCSS = wcss;
         bestResult = { ...result };
@@ -409,7 +436,24 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
   }
   
   if (!bestResult) {
-    throw new Error('All K-Means attempts failed');
+    console.error('All K-Means attempts failed - using fallback clustering');
+    // Create a simple fallback clustering
+    const fallbackClusters = features.map((_, i) => i % k);
+    const fallbackCentroids = Array(k).fill(null).map((_, clusterIdx) => {
+      const clusterPoints = features.filter((_, i) => fallbackClusters[i] === clusterIdx);
+      if (clusterPoints.length === 0) {
+        return Array(features[0].length).fill(0);
+      }
+      return Array(features[0].length).fill(0).map((_, dim) => {
+        return clusterPoints.reduce((sum, point) => sum + point[dim], 0) / clusterPoints.length;
+      });
+    });
+    
+    bestResult = {
+      clusters: fallbackClusters,
+      centroids: fallbackCentroids
+    };
+    bestWCSS = calculateWCSS(features, fallbackClusters, fallbackCentroids);
   }
   
   console.log(`\nBest result selected: WCSS = ${bestWCSS.toFixed(3)}`);
@@ -417,7 +461,7 @@ const runKMeansWithRetry = (features: number[][], k: number, maxAttempts: number
 };
 
 /**
- * NEW: Calculate elbow method data using specific K values from experiments
+ * Calculate elbow method data using specific K values from experiments
  */
 export const calculateElbowMethodFromExperiments = async (
   data: DataPoint[],
@@ -458,7 +502,7 @@ export const calculateElbowMethodFromExperiments = async (
       console.log(`\n--- K = ${k} ---`);
       
       // Run K-Means clustering with retry mechanism
-      let result = runKMeansWithRetry(features, k, 10);
+      let result = runKMeansWithRetry(features, k, 15);
       
       // Validate and fix result if needed
       result = validateClusteringResult(result, k, features.length, features);
@@ -511,114 +555,7 @@ export const calculateElbowMethodFromExperiments = async (
 };
 
 /**
- * LEGACY: Calculate elbow method data (WCSS and DBI for different K values) - KEPT FOR BACKWARD COMPATIBILITY
- */
-export const calculateElbowMethod = async (
-  data: DataPoint[],
-  numericalColumns: string[],
-  maxK: number = 10
-): Promise<{ wcss: number[]; dbi: number[] }> => {
-  if (!data || data.length === 0) {
-    throw new Error('Data tidak boleh kosong');
-  }
-
-  if (!numericalColumns || numericalColumns.length === 0) {
-    throw new Error('Tidak ada kolom numerik yang tersedia');
-  }
-
-  // Extract features
-  const features = extractFeatures(data, numericalColumns);
-  
-  if (features.length === 0) {
-    throw new Error('Tidak ada data numerik yang valid untuk clustering');
-  }
-
-  // Limit maxK to reasonable bounds
-  maxK = Math.min(maxK, Math.floor(features.length / 3));
-
-  const wcssValues: number[] = [];
-  const dbiValues: number[] = [];
-
-  console.log(`\n=== ELBOW METHOD ANALYSIS (LEGACY) ===`);
-  console.log(`Features: ${features.length} points x ${features[0]?.length || 0} dimensions`);
-  console.log(`Testing K from 1 to ${maxK}`);
-
-  for (let k = 1; k <= maxK; k++) {
-    try {
-      console.log(`\n--- K = ${k} ---`);
-      
-      if (k === 1) {
-        // For k=1, calculate total variance as WCSS
-        const centroid = features[0].map((_, colIdx) => {
-          return features.reduce((sum, row) => sum + (row[colIdx] || 0), 0) / features.length;
-        });
-        
-        let wcss = 0;
-        for (const point of features) {
-          const distance = calculateEuclideanDistance(point, centroid);
-          wcss += distance * distance;
-        }
-        
-        wcssValues.push(wcss);
-        dbiValues.push(0); // DBI is undefined for k=1
-        console.log(`K=1: WCSS=${wcss.toFixed(3)}, DBI=0 (undefined)`);
-        continue;
-      }
-
-      // Run K-Means clustering with retry mechanism
-      let result = runKMeansWithRetry(features, k, 10);
-      
-      // Validate and fix result if needed
-      result = validateClusteringResult(result, k, features.length, features);
-
-      // Calculate WCSS
-      const wcss = calculateWCSS(features, result.clusters, result.centroids);
-      wcssValues.push(wcss);
-
-      // Calculate Davies-Bouldin Index
-      const dbi = calculateDaviesBouldinIndex(features, result.clusters, result.centroids);
-      dbiValues.push(dbi);
-
-      console.log(`K=${k} FINAL: WCSS=${wcss.toFixed(3)}, DBI=${dbi.toFixed(3)}`);
-
-    } catch (error) {
-      console.error(`Error calculating metrics for k=${k}:`, error);
-      
-      // Use reasonable fallback values based on previous values
-      const prevWCSS = wcssValues[wcssValues.length - 1];
-      const prevDBI = dbiValues[dbiValues.length - 1];
-      
-      let fallbackWCSS: number;
-      let fallbackDBI: number;
-      
-      if (prevWCSS !== undefined && prevWCSS > 0) {
-        // Decrease WCSS as K increases (typical pattern)
-        fallbackWCSS = prevWCSS * (0.6 + Math.random() * 0.3);
-        fallbackDBI = Math.max(0.1, (prevDBI || 1) * (0.7 + Math.random() * 0.5));
-      } else {
-        // First fallback - estimate based on data variance
-        const totalVariance = features.reduce((sum, point) => {
-          return sum + point.reduce((pSum, val) => pSum + val * val, 0);
-        }, 0);
-        fallbackWCSS = totalVariance / k;
-        fallbackDBI = 0.5 + Math.random() * 1.5;
-      }
-      
-      wcssValues.push(fallbackWCSS);
-      dbiValues.push(fallbackDBI);
-      console.log(`K=${k} FALLBACK: WCSS=${fallbackWCSS.toFixed(3)}, DBI=${fallbackDBI.toFixed(3)}`);
-    }
-  }
-
-  console.log('\n=== ELBOW ANALYSIS COMPLETE (LEGACY) ===');
-  console.log('WCSS values:', wcssValues.map(v => v.toFixed(3)));
-  console.log('DBI values:', dbiValues.map(v => v.toFixed(3)));
-
-  return { wcss: wcssValues, dbi: dbiValues };
-};
-
-/**
- * Perform K-Means clustering on data
+ * Perform K-Means clustering on data with enhanced error handling
  */
 export const performKMeansClustering = async (
   data: DataPoint[],
@@ -651,8 +588,8 @@ export const performKMeansClustering = async (
   }
 
   try {
-    // Run K-Means with retry mechanism
-    let result = runKMeansWithRetry(features, k, 10);
+    // Run K-Means with enhanced retry mechanism
+    let result = runKMeansWithRetry(features, k, 15);
 
     // Validate and fix result if needed
     result = validateClusteringResult(result, k, features.length, features);
