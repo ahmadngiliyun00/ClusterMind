@@ -891,7 +891,7 @@ function App() {
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                            <span>Filter kolom dengan cardinality tinggi (>10 nilai unik)</span>
+                            <span>Filter kolom dengan cardinality tinggi (&gt;10 nilai unik)</span>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
