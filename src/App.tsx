@@ -241,16 +241,30 @@ function App() {
     }
   };
 
-  // Run Elbow Method with progress
+  // Run Elbow Method with enhanced progress and logging
   const runElbowMethod = async () => {
     if (!normalizedData) return;
     
     try {
       setIsLoading(true);
-      setLoadingProgress('Menjalankan analisis Elbow Method...');
+      setLoadingProgress('Memulai analisis Elbow Method...');
       
+      // Clear console and start logging
+      console.clear();
       console.log('\n📈 ELBOW METHOD ANALYSIS STARTED');
-      console.log('='.repeat(60));
+      console.log('='.repeat(80));
+      console.log(`📊 Dataset: ${normalizedData.data.length} rows × ${normalizedData.numericalColumns.length} features`);
+      console.log(`🔢 Features: [${normalizedData.numericalColumns.join(', ')}]`);
+      console.log(`📋 Testing K values from 1 to ${Math.min(10, Math.floor(normalizedData.data.length / 3))}`);
+      console.log('='.repeat(80));
+      
+      // Add delay to show loading state
+      await delay(1000);
+      
+      setLoadingProgress('Menghitung WCSS dan DBI untuk berbagai nilai K...');
+      await delay(500);
+      
+      setLoadingProgress('Menganalisis pola elbow untuk menentukan K optimal...');
       
       const elbowResult = await calculateElbowMethod(
         normalizedData.data,
@@ -258,17 +272,78 @@ function App() {
       );
       
       console.log('\n✅ ELBOW ANALYSIS COMPLETED');
-      console.log('='.repeat(60));
+      console.log('='.repeat(80));
+      console.log('📋 ELBOW METHOD SUMMARY:');
+      console.log('─'.repeat(40));
+      console.log('| K | WCSS      | DBI      |');
+      console.log('|---|-----------|----------|');
+      elbowResult.wcss.forEach((wcss, i) => {
+        const k = i + 1;
+        const dbi = k === 1 ? '-' : elbowResult.dbi[i]?.toFixed(3) || 'N/A';
+        console.log(`| ${k.toString().padStart(1)} | ${wcss.toFixed(3).padStart(9)} | ${dbi.padStart(8)} |`);
+      });
+      
+      // Find elbow point
+      const elbowK = findElbowPoint(elbowResult.wcss);
+      const optimalDBI = findOptimalDBI(elbowResult.dbi);
+      
+      console.log('\n🎯 RECOMMENDATIONS:');
+      if (elbowK) {
+        console.log(`   • Elbow Point (WCSS): K = ${elbowK}`);
+      }
+      if (optimalDBI) {
+        console.log(`   • Optimal DBI: K = ${optimalDBI}`);
+      }
+      console.log('='.repeat(80));
+      console.log('💡 Tip: Look for the "elbow" in WCSS graph and minimum DBI value');
       
       setElbowData(elbowResult);
       setActiveStep(6);
+      
     } catch (error) {
-      console.error('Error calculating elbow method:', error);
-      alert('Terjadi kesalahan saat menghitung metode elbow: ' + (error as Error).message);
+      console.error('❌ ELBOW ANALYSIS FAILED:', error);
+      alert('Terjadi kesalahan saat melakukan analisis elbow: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
       setLoadingProgress('');
     }
+  };
+
+  // Helper functions for elbow analysis
+  const findElbowPoint = (wcssValues: number[]): number | null => {
+    if (wcssValues.length < 3) return null;
+    
+    let maxDiff = 0;
+    let elbowK = 2;
+    
+    for (let i = 1; i < wcssValues.length - 1; i++) {
+      const diff1 = wcssValues[i - 1] - wcssValues[i];
+      const diff2 = wcssValues[i] - wcssValues[i + 1];
+      const totalDiff = diff1 - diff2;
+      
+      if (totalDiff > maxDiff) {
+        maxDiff = totalDiff;
+        elbowK = i + 1;
+      }
+    }
+    
+    return elbowK;
+  };
+
+  const findOptimalDBI = (dbiValues: number[]): number | null => {
+    if (dbiValues.length < 2) return null;
+    
+    let minDBI = Infinity;
+    let optimalK = 2;
+    
+    for (let i = 1; i < dbiValues.length; i++) {
+      if (dbiValues[i] > 0 && dbiValues[i] < minDBI) {
+        minDBI = dbiValues[i];
+        optimalK = i + 1;
+      }
+    }
+    
+    return optimalK;
   };
 
   // Navigation functions

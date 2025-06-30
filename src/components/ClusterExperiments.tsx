@@ -72,9 +72,24 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
     onRunExperiments(experiments);
   };
 
+  const handleRunElbowMethod = () => {
+    console.log('\n📈 USER INITIATED ELBOW METHOD ANALYSIS');
+    console.log('='.repeat(50));
+    console.log('Starting comprehensive elbow analysis...');
+    console.log('='.repeat(50));
+    
+    onRunElbowMethod();
+  };
+
+  // Check if it's elbow analysis loading
+  const isElbowLoading = isLoading && loadingProgress.includes('Elbow');
+  const isExperimentLoading = isLoading && !isElbowLoading;
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">Konfigurasi Algoritma</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-gray-800">Konfigurasi Algoritma</h2>
+      </div>
       
       <div className="space-y-6">
         {/* Algorithm Selection */}
@@ -155,10 +170,10 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+        {/* Action Buttons - Fixed Layout to Match Design */}
+        <div className="flex justify-end gap-3 mt-6">
           <button
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+            className="flex items-center justify-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             onClick={handleRunExperiments}
             disabled={isLoading || experiments.length < 5}
           >
@@ -168,8 +183,8 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
           
           {showElbowButton && (
             <button
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-              onClick={onRunElbowMethod}
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              onClick={handleRunElbowMethod}
               disabled={isLoading}
             >
               <BarChart3 size={20} />
@@ -179,8 +194,8 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
         </div>
       </div>
 
-      {/* Enhanced Loading State with Detailed Progress */}
-      {isLoading && (
+      {/* Enhanced Loading State for Clustering Experiments */}
+      {isExperimentLoading && (
         <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <div className="flex items-center gap-3 mb-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -245,6 +260,78 @@ const ClusterExperiments: React.FC<ClusterExperimentsProps> = ({
                   </p>
                   <p className="text-xs text-yellow-700 mt-1">
                     Console akan menampilkan log detail untuk setiap eksperimen termasuk nilai WCSS dan DBI
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Loading State for Elbow Analysis */}
+      {isElbowLoading && (
+        <div className="mt-6 p-6 bg-gradient-to-r from-teal-50 to-green-50 rounded-lg border border-teal-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Memproses Analisis Elbow Method</h3>
+              {loadingProgress && (
+                <p className="text-sm text-gray-600">{loadingProgress}</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <BarChart3 size={16} />
+              <span>Menjalankan clustering untuk berbagai nilai K (1 hingga {maxK})...</span>
+            </div>
+            
+            <div className="bg-white p-4 rounded border border-teal-100">
+              <p className="text-sm font-medium text-gray-700 mb-3">Tahapan Analisis Elbow:</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                  <span>Menghitung WCSS untuk setiap nilai K (K=1 hingga K={maxK})</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                  <span>Menghitung Davies-Bouldin Index untuk setiap nilai K</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                  <span>Menganalisis pola penurunan WCSS untuk menentukan elbow point</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
+                  <span>Mencari nilai K optimal berdasarkan metrik evaluasi</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded p-3">
+              <div className="flex items-start gap-2">
+                <CheckCircle size={16} className="text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-blue-800 font-medium">
+                    📊 Analisis Komprehensif
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Elbow Method akan menghasilkan grafik WCSS dan DBI untuk membantu menentukan jumlah cluster optimal
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="text-sm text-yellow-800 font-medium">
+                    💡 Tip: Buka Developer Console (F12) untuk melihat detail perhitungan
+                  </p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    Console akan menampilkan log detail untuk setiap nilai K termasuk perhitungan WCSS dan DBI
                   </p>
                 </div>
               </div>
