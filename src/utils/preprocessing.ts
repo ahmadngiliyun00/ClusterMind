@@ -88,17 +88,17 @@ export function analyzeDataForClustering(data: DataPoint[], categoricalColumns: 
     
     console.log(`📊 Column "${column}": ${cardinality} unique values`);
     
-    // High cardinality warning
-    if (cardinality > 50) {
+    // Updated thresholds - more lenient for sekolah and kabupaten
+    if (cardinality > 100) {
       warnings.push(`Kolom "${column}" memiliki ${cardinality} nilai unik (sangat tinggi)`);
       recommendations.push(`Pertimbangkan untuk menghapus atau mengelompokkan kolom "${column}"`);
-    } else if (cardinality > 20) {
+    } else if (cardinality > 50) {
       warnings.push(`Kolom "${column}" memiliki ${cardinality} nilai unik (tinggi)`);
     }
     
-    // Near-unique data warning
+    // Near-unique data warning - more lenient threshold
     const uniquenessRatio = cardinality / data.length;
-    if (uniquenessRatio > 0.8) {
+    if (uniquenessRatio > 0.9) {
       warnings.push(`Kolom "${column}" hampir unik (${(uniquenessRatio * 100).toFixed(1)}% dari data)`);
       recommendations.push(`Kolom "${column}" tidak cocok untuk clustering karena terlalu unik`);
     }
@@ -112,16 +112,16 @@ export function analyzeDataForClustering(data: DataPoint[], categoricalColumns: 
   console.log(`   Data rows: ${data.length}`);
   console.log(`   Sparsity ratio: ${sparsityRatio.toFixed(2)} (features/rows)`);
   
-  // Overall assessment
+  // Overall assessment - more lenient
   let isValid = true;
   
-  if (sparsityRatio > 5) {
+  if (sparsityRatio > 10) {
     isValid = false;
     warnings.push(`Data akan menjadi sangat sparse (${sparsityRatio.toFixed(1)} fitur per baris)`);
     recommendations.push('Kurangi jumlah kolom kategorikal atau gunakan teknik dimensionality reduction');
   }
   
-  if (totalPotentialFeatures > 1000) {
+  if (totalPotentialFeatures > 2000) {
     isValid = false;
     warnings.push(`Terlalu banyak fitur setelah One-Hot Encoding (${totalPotentialFeatures})`);
     recommendations.push('Pilih hanya kolom dengan cardinality rendah untuk clustering');
@@ -129,8 +129,8 @@ export function analyzeDataForClustering(data: DataPoint[], categoricalColumns: 
   
   // Specific recommendations
   if (warnings.length > 0) {
-    recommendations.push('Gunakan hanya kolom dengan sedikit kategori (seperti: prodi, kelamin, jalur, status)');
-    recommendations.push('Hindari kolom dengan banyak nilai unik (seperti: sekolah, kelurahan, kecamatan)');
+    recommendations.push('Gunakan kolom dengan cardinality sedang (seperti: sekolah ≤50, kabupaten ≤50)');
+    recommendations.push('Hindari kolom dengan cardinality sangat tinggi (seperti: kelurahan, kecamatan >100)');
   }
   
   console.log(`\n${isValid ? '✅' : '❌'} Overall assessment: ${isValid ? 'SUITABLE' : 'NOT SUITABLE'} for clustering`);
@@ -147,11 +147,12 @@ export function analyzeDataForClustering(data: DataPoint[], categoricalColumns: 
 
 /**
  * Filter columns based on cardinality for better clustering
+ * Updated to be more lenient for sekolah and kabupaten
  */
 export function filterColumnsForClustering(
   data: DataPoint[], 
   categoricalColumns: string[], 
-  maxCardinality: number = 10
+  maxCardinality: number = 50  // Increased from 10 to 50
 ): {
   suitableColumns: string[];
   excludedColumns: string[];
@@ -170,9 +171,12 @@ export function filterColumnsForClustering(
     const cardinality = uniqueValues.size;
     cardinalityInfo[column] = cardinality;
     
-    if (cardinality <= maxCardinality) {
+    // Special handling for important columns
+    const isImportantColumn = ['sekolah', 'kabupaten', 'prodi', 'jalur', 'kelamin', 'status'].includes(column.toLowerCase());
+    
+    if (cardinality <= maxCardinality || (isImportantColumn && cardinality <= 100)) {
       suitableColumns.push(column);
-      console.log(`✅ "${column}": ${cardinality} values - INCLUDED`);
+      console.log(`✅ "${column}": ${cardinality} values - INCLUDED ${isImportantColumn ? '(important column)' : ''}`);
     } else {
       excludedColumns.push(column);
       console.log(`❌ "${column}": ${cardinality} values - EXCLUDED (too high cardinality)`);
@@ -188,11 +192,12 @@ export function filterColumnsForClustering(
 
 /**
  * Smart One-Hot Encoding with cardinality filtering
+ * Updated with more lenient thresholds
  */
 export function smartOneHotEncoding(
   data: DataPoint[], 
   categoricalColumns: string[],
-  maxCardinality: number = 10
+  maxCardinality: number = 50  // Increased from 10 to 50
 ): {
   encodedData: DataPoint[];
   encodingMaps: EncodingMap;
@@ -393,6 +398,7 @@ export function minMaxNormalization(
 
 /**
  * Perform smart One-Hot Encoding with validation and filtering
+ * Updated with more lenient cardinality threshold
  */
 export async function performOneHotEncoding(rawData: ParsedData): Promise<ParsedData & { 
   validationResult?: DataValidationResult;
@@ -409,14 +415,14 @@ export async function performOneHotEncoding(rawData: ParsedData): Promise<Parsed
     };
   }
   
-  // Use smart One-Hot Encoding with cardinality filtering
+  // Use smart One-Hot Encoding with increased cardinality threshold
   const { 
     encodedData, 
     encodingMaps, 
     newColumns, 
     excludedColumns, 
     validationResult 
-  } = smartOneHotEncoding(rawData.data, categoricalColumns, 10); // Max 10 unique values per column
+  } = smartOneHotEncoding(rawData.data, categoricalColumns, 50); // Increased from 10 to 50
   
   // Update headers: remove excluded categorical columns, keep numerical, add new binary columns
   const newHeaders = rawData.headers
