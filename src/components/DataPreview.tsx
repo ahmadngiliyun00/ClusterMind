@@ -53,6 +53,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({
     }
   };
 
+  // Determine normalization method based on title
+  const isNormalizationStep = title.includes('normalisasi') || title.includes('Normalisasi');
+  const normalizationMethod = isNormalizationStep ? 'Min-Max (0-1)' : '';
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-start gap-4 mb-6">
@@ -62,6 +66,16 @@ const DataPreview: React.FC<DataPreviewProps> = ({
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
           <p className="text-gray-600 text-sm mt-1">{description}</p>
+          {isNormalizationStep && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Metode Normalisasi:</strong> {normalizationMethod} scaling
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Menggunakan Min-Max normalization untuk rentang nilai 0-1 yang lebih natural untuk clustering
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-2 text-sm text-gray-600">
             <span>{data.length} baris data</span>
             <span>•</span>
@@ -141,11 +155,19 @@ const DataPreview: React.FC<DataPreviewProps> = ({
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayData.map((row, index) => (
                   <tr key={row.id || index} className="hover:bg-gray-50">
-                    {headers.slice(0, 8).map((header) => (
-                      <td key={header} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {row[header]?.toString() || '-'}
-                      </td>
-                    ))}
+                    {headers.slice(0, 8).map((header) => {
+                      const value = row[header];
+                      const isNumeric = numericalColumns.includes(header);
+                      const displayValue = isNumeric && typeof value === 'number' 
+                        ? value.toFixed(3) 
+                        : value?.toString() || '-';
+                      
+                      return (
+                        <td key={header} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {displayValue}
+                        </td>
+                      );
+                    })}
                     {headers.length > 8 && (
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
                         ...
