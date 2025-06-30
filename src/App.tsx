@@ -42,6 +42,7 @@ function App() {
   const [showAbout, setShowAbout] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [showNormalizationStep, setShowNormalizationStep] = useState(false);
   
   // Handle file upload
   const handleFileUpload = async (file: File, separator?: string) => {
@@ -56,6 +57,7 @@ function App() {
       setElbowData(null);
       setActiveStep(2);
       setShowAbout(false);
+      setShowNormalizationStep(false);
     } catch (error) {
       console.error('Error parsing file:', error);
       alert('Terjadi kesalahan saat mengurai file. Pastikan format file sudah benar: ' + (error as Error).message);
@@ -93,9 +95,16 @@ function App() {
       }
       
       setProcessedData(result);
+      setActiveStep(3);
       
-      // Auto-proceed to normalization
-      await performNormalizationStep(result);
+      // Check if normalization is needed
+      const needsNormalization = await checkIfNormalizationNeeded(result);
+      if (needsNormalization) {
+        setShowNormalizationStep(true);
+      } else {
+        // Auto-proceed to normalization if not needed for display
+        await performNormalizationStep(result);
+      }
       
     } catch (error) {
       console.error('Error in One-Hot Encoding:', error);
@@ -106,6 +115,20 @@ function App() {
     }
   };
 
+  // Check if normalization is needed (for display purposes)
+  const checkIfNormalizationNeeded = async (data: ParsedData): Promise<boolean> => {
+    // Check if data contains non-binary values that would benefit from normalization
+    const sampleValues = data.data.slice(0, 10);
+    const hasNonBinaryValues = sampleValues.some(row => 
+      data.numericalColumns.some(col => {
+        const val = Number(row[col]);
+        return !isNaN(val) && val !== 0 && val !== 1;
+      })
+    );
+    
+    return hasNonBinaryValues;
+  };
+
   // Handle normalization as a separate function
   const performNormalizationStep = async (dataToNormalize: ParsedData) => {
     try {
@@ -113,10 +136,30 @@ function App() {
       
       const normalizedResult = await performNormalization(dataToNormalize);
       setNormalizedData(normalizedResult);
-      setActiveStep(3); // Skip to step 3 (clustering configuration)
+      
+      if (showNormalizationStep) {
+        setActiveStep(4); // Show normalization step
+      } else {
+        setActiveStep(4); // Skip to clustering configuration
+      }
     } catch (error) {
       console.error('Error normalizing data:', error);
       alert('Terjadi kesalahan saat melakukan normalisasi data: ' + (error as Error).message);
+    }
+  };
+
+  // Handle manual normalization trigger
+  const handleNormalization = async () => {
+    if (!processedData) return;
+    
+    try {
+      setIsLoading(true);
+      await performNormalizationStep(processedData);
+    } catch (error) {
+      console.error('Error in normalization:', error);
+    } finally {
+      setIsLoading(false);
+      setLoadingProgress('');
     }
   };
 
@@ -252,7 +295,7 @@ function App() {
       }
       
       setExperimentResults(results);
-      setActiveStep(4); // Move to step 4 for clustering results
+      setActiveStep(5); // Move to step 5 for clustering results
       setActiveTab(0); // Reset to first tab
       
     } catch (error) {
@@ -335,7 +378,7 @@ function App() {
         dbi: elbowResult.dbi,
         kValues: kValues
       });
-      setActiveStep(5); // Move to step 5 for elbow analysis
+      setActiveStep(6); // Move to step 6 for elbow analysis
       
     } catch (error) {
       console.error('❌ ELBOW ANALYSIS FAILED:', error);
@@ -393,8 +436,10 @@ function App() {
   const goToNextStep = () => {
     if (activeStep === 2 && rawData) {
       handleOneHotEncoding();
-    } else if (activeStep === 3 && normalizedData) {
-      setActiveStep(4);
+    } else if (activeStep === 3 && processedData && showNormalizationStep) {
+      handleNormalization();
+    } else if (activeStep === 4 && normalizedData) {
+      setActiveStep(5);
     }
   };
 
@@ -443,6 +488,7 @@ function App() {
     setLoadingProgress('');
     setCurrentExperiment(0);
     setTotalExperiments(0);
+    setShowNormalizationStep(false);
   };
 
   return (
@@ -624,11 +670,11 @@ function App() {
           </section>
         ) : (
           <>
-            {/* Workflow Steps - Updated to 5 steps */}
+            {/* Workflow Steps - Dynamic based on normalization need */}
             <div className="flex justify-center mb-8">
               <div className="w-full max-w-5xl">
                 <ol className="flex items-center w-full justify-center">
-                  {[1, 2, 3, 4, 5].map((step, index) => (
+                  {(showNormalizationStep ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5]).map((step, index, array) => (
                     <React.Fragment key={step}>
                       <li className="flex items-center">
                         <span className={`flex items-center justify-center w-12 h-12 border-4 text-lg font-bold rounded-full ${
@@ -639,7 +685,7 @@ function App() {
                           {step}
                         </span>
                       </li>
-                      {index < 4 && (
+                      {index < array.length - 1 && (
                         <li className={`flex items-center w-full ${
                           activeStep > step 
                             ? 'after:content-[""] after:w-full after:h-1 after:border-b after:border-indigo-500 after:border-4 after:inline-block' 
@@ -653,6 +699,8 @@ function App() {
                 <div className="flex justify-between mt-2 text-xs text-gray-600">
                   <span>Upload</span>
                   <span>Preview</span>
+                  {showNormalizationStep && <span>One-Hot</span>}
+                  {showNormalizationStep && <span>Normalisasi</span>}
                   <span>Clustering</span>
                   <span>Hasil</span>
                   <span>Elbow</span>
@@ -702,8 +750,44 @@ function App() {
                 </section>
               )}
 
-              {/* Step 3: Clustering Configuration */}
-              {activeStep >= 3 && normalizedData && (
+              {/* Step 3: Processed Data (One-Hot Encoded) - Only show if normalization step is needed */}
+              {activeStep >= 3 && processedData && showNormalizationStep && (
+                <section>
+                  <DataPreview
+                    data={processedData.data}
+                    headers={processedData.headers}
+                    title="Data telah diproses dengan Smart One-Hot Encoding"
+                    description="Kolom kategorikal telah dikonversi menjadi binary features. Kolom dengan cardinality tinggi telah difilter untuk clustering yang lebih efektif."
+                    numericalColumns={processedData.numericalColumns}
+                    categoricalColumns={processedData.categoricalColumns}
+                    onNext={activeStep === 3 ? goToNextStep : undefined}
+                    nextButtonText="Lakukan Normalisasi Min-Max"
+                    showNextButton={activeStep === 3}
+                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
+                  />
+                </section>
+              )}
+
+              {/* Step 4: Normalized Data - Only show if normalization step is needed */}
+              {activeStep >= 4 && normalizedData && showNormalizationStep && (
+                <section>
+                  <DataPreview
+                    data={normalizedData.data}
+                    headers={normalizedData.headers}
+                    title="Data siap untuk clustering"
+                    description="Data telah dinormalisasi dan siap untuk proses clustering K-Means. Semua fitur berada dalam skala yang sesuai untuk analisis jarak Euclidean."
+                    numericalColumns={normalizedData.numericalColumns}
+                    categoricalColumns={normalizedData.categoricalColumns}
+                    onNext={activeStep === 4 ? goToNextStep : undefined}
+                    nextButtonText="Lanjut ke Clustering"
+                    showNextButton={activeStep === 4}
+                    onPrevious={activeStep > 1 ? goToPreviousStep : undefined}
+                  />
+                </section>
+              )}
+
+              {/* Step 3/4/5: Clustering Configuration - Dynamic step number based on normalization */}
+              {activeStep >= (showNormalizationStep ? 5 : 3) && normalizedData && (
                 <section>
                   <ClusterExperiments
                     onRunExperiments={runClusteringExperiments}
@@ -718,8 +802,8 @@ function App() {
                 </section>
               )}
 
-              {/* Step 4: Clustering Results - ONLY SHOW WHEN NOT LOADING AND HAVE RESULTS */}
-              {activeStep >= 4 && experimentResults.length > 0 && !isLoading && (
+              {/* Step 4/5/6: Clustering Results - Dynamic step number based on normalization */}
+              {activeStep >= (showNormalizationStep ? 5 : 4) && experimentResults.length > 0 && !isLoading && (
                 <section className="space-y-6">
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center justify-between mb-6">
@@ -807,14 +891,14 @@ function App() {
                 </section>
               )}
 
-              {/* Step 5: Elbow Analysis - ONLY SHOW WHEN HAVE ELBOW DATA AND NOT LOADING */}
-              {activeStep >= 5 && elbowData && !isLoading && (
+              {/* Step 5/6: Elbow Analysis - Dynamic step number based on normalization */}
+              {activeStep >= (showNormalizationStep ? 6 : 5) && elbowData && !isLoading && (
                 <section>
                   <ElbowAnalysis
                     wcssValues={elbowData.wcss}
                     dbiValues={elbowData.dbi}
                     kValues={elbowData.kValues}
-                    onBack={() => setActiveStep(4)}
+                    onBack={() => setActiveStep(showNormalizationStep ? 5 : 4)}
                     onReset={handleReset}
                   />
                 </section>
@@ -880,8 +964,68 @@ function App() {
                 </section>
               )}
 
+              {/* Loading State for Normalization */}
+              {isLoading && loadingProgress.includes('normalisasi') && (
+                <section>
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Memproses Normalisasi Data</h3>
+                        {loadingProgress && (
+                          <p className="text-sm text-gray-600">{loadingProgress}</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Zap size={16} />
+                        <span>Menerapkan Min-Max normalization...</span>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded border border-green-100">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Tahapan Normalisasi:</p>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Menghitung nilai minimum dan maksimum setiap kolom</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Menerapkan formula Min-Max: (x - min) / (max - min)</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Mengubah skala data ke rentang 0-1</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Validasi hasil normalisasi</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                        <div className="flex items-start gap-2">
+                          <div className="text-blue-600 mt-0.5">📊</div>
+                          <div>
+                            <p className="text-sm text-blue-800 font-medium">
+                              Min-Max Normalization
+                            </p>
+                            <p className="text-xs text-blue-700 mt-1">
+                              Mengubah semua fitur numerik ke skala 0-1 untuk clustering yang lebih akurat
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {/* Loading State for Elbow Analysis */}
-              {activeStep >= 5 && isLoading && loadingProgress.includes('Elbow') && (
+              {activeStep >= (showNormalizationStep ? 6 : 5) && isLoading && loadingProgress.includes('Elbow') && (
                 <section>
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center gap-3 mb-4">
